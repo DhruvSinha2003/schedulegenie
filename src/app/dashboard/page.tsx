@@ -4,20 +4,28 @@
 import TaskInputForm from "@/components/TaskInputForm"; // Ensure this path is correct
 import { useUser } from "@auth0/nextjs-auth0/client";
 import { useCallback, useEffect, useState } from "react";
-import { FaSpinner } from "react-icons/fa";
+import {
+  FaRegCheckSquare,
+  FaRegSquare,
+  FaSpinner,
+  FaTrashAlt,
+} from "react-icons/fa";
 
 // --- Interfaces ---
-interface ScheduleTask {
-  id: string;
+interface Task {
+  taskId: string;
   content: string;
+  day: string;
   time: string;
-  // Add day, notes if you plan to display them on the card
+  timestamp: string | null;
+  isCompleted: boolean;
+  notes: string | null;
 }
 
 interface ScheduleColumn {
   id: string;
   title: string;
-  tasks: ScheduleTask[];
+  tasks: Task[];
 }
 
 interface ScheduleInputData {
@@ -26,165 +34,240 @@ interface ScheduleInputData {
   flexibility: "rigid" | "flexible";
 }
 
-// Expected API response structure from GET /api/get-schedule and POST /api/generate-schedule
 interface ScheduleApiResponse {
-  schedule: Array<{
-    id?: string;
-    content?: string;
-    day?: string;
-    time?: string;
-    notes?: string;
-  }>;
-  notes?: string | null; // Overall notes might be present
-  // dbSaveWarning?: string; // Example if adding warning from generate API
+  tasks: Task[];
+  notes?: string | null;
 }
 
 // --- Component ---
 export default function Dashboard() {
   const { user, isLoading: userLoading, error: userError } = useUser();
+  const [allTasks, setAllTasks] = useState<Task[]>([]);
   const [scheduleColumns, setScheduleColumns] = useState<ScheduleColumn[]>([]);
   const [isGenerating, setIsGenerating] = useState(false);
-  const [isLoadingSchedule, setIsLoadingSchedule] = useState(true); // Start true for initial load
+  const [isLoadingSchedule, setIsLoadingSchedule] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [scheduleNotes, setScheduleNotes] = useState<string | null>(null); // Store overall notes
+  const [scheduleNotes, setScheduleNotes] = useState<string | null>(null);
 
-  // --- useCallback to process schedule data ---
-  const processScheduleData = useCallback(
-    (data: ScheduleApiResponse | null) => {
-      setScheduleNotes(data?.notes || null); // Store overall notes
+  // --- useCallback to process tasks into columns ---
+  const processTasksIntoColumns = useCallback((tasks: Task[]) => {
+    if (!tasks || tasks.length === 0) {
+      setScheduleColumns([]);
+      return;
+    }
 
-      if (!data || !data.schedule || data.schedule.length === 0) {
-        setScheduleColumns([]);
-        return;
+    const columnsMap: { [key: string]: ScheduleColumn } = {};
+    const sortedTasks = tasks.sort((a, b) => {
+      const timeA = a.timestamp ? new Date(a.timestamp).getTime() : Infinity;
+      const timeB = b.timestamp ? new Date(b.timestamp).getTime() : Infinity;
+      if (timeA === timeB) {
+        return (a.day + a.time).localeCompare(b.day + b.time);
       }
+      return timeA - timeB;
+    });
 
-      const columnsMap: { [key: string]: ScheduleColumn } = {};
-      data.schedule.forEach((task, index) => {
-        const day = task.day || `Day ${index + 1}`; // Fallback title if day is missing
-        const columnId = day.toLowerCase().replace(/\s+/g, "-");
+    sortedTasks.forEach((task) => {
+      const day = task.day || "Unspecified Day";
+      const columnId = day.toLowerCase().replace(/\s+/g, "-");
 
-        if (!columnsMap[columnId]) {
-          columnsMap[columnId] = { id: columnId, title: day, tasks: [] };
-        }
-        columnsMap[columnId].tasks.push({
-          id: task.id || `task-${Date.now()}-${index}`, // Ensure unique ID
-          content: task.content || "Unnamed Task",
-          time: task.time || "Unspecified Time",
-          // Add notes: task.notes if needed
-        });
-      });
-      setScheduleColumns(Object.values(columnsMap));
-    },
-    []
-  );
+      if (!columnsMap[columnId]) {
+        columnsMap[columnId] = { id: columnId, title: day, tasks: [] };
+      }
+      columnsMap[columnId].tasks.push(task);
+    });
+    setScheduleColumns(Object.values(columnsMap));
+  }, []);
 
   // --- useEffect to load schedule on mount ---
   useEffect(() => {
-    // Defined inside useEffect to capture current 'user' value correctly
     const fetchSchedule = async () => {
-      // No need to check user here again, outer check handles it
       setIsLoadingSchedule(true);
       setError(null);
-      setScheduleNotes(null); // Clear old notes
-      console.log("Dashboard: Attempting to fetch schedule...");
+      setScheduleNotes(null);
       try {
-        const response = await fetch("/api/get-schedule"); // Ensure this URL is correct
-        console.log(`Dashboard: Fetch response status: ${response.status}`);
+        const response = await fetch("/api/get-schedule");
         if (!response.ok) {
-          let errorData;
-          try {
-            errorData = await response.json();
-          } catch {
-            // Handle cases where response is not JSON
-            errorData = {
-              message: `Failed to fetch schedule. Status: ${response.status}`,
-            };
-          }
-          throw new Error(
-            errorData?.message || `HTTP error! status: ${response.status}`
-          );
+          const errorData = await response
+            .json()
+            .catch(() => ({
+              message: `HTTP error! status: ${response.status}`,
+            }));
+          throw new Error(errorData.message);
         }
         const result: ScheduleApiResponse = await response.json();
-        console.log("Dashboard: Received schedule data:", result);
-        processScheduleData(result);
+        setAllTasks(result.tasks || []);
+        setScheduleNotes(result.notes || null);
+        processTasksIntoColumns(result.tasks || []);
       } catch (err: any) {
         console.error("Dashboard: Error fetching schedule:", err);
         setError("Could not load your saved schedule. " + err.message);
-        setScheduleColumns([]); // Clear schedule on error
+        setAllTasks([]);
+        setScheduleColumns([]);
       } finally {
         setIsLoadingSchedule(false);
-        console.log("Dashboard: Finished fetching schedule.");
       }
     };
 
-    // Fetch only when user is loaded and exists
     if (!userLoading && user) {
       fetchSchedule();
     } else if (!userLoading && !user) {
-      // User loaded but is null (logged out state) - ensure loading is false
       setIsLoadingSchedule(false);
-      setScheduleColumns([]); // Clear any stale data
-      setScheduleNotes(null);
-      console.log("Dashboard: User not logged in, skipping schedule fetch.");
+      setAllTasks([]);
+      setScheduleColumns([]);
     }
-    // Add processScheduleData to dependency array as it's used inside
-  }, [user, userLoading, processScheduleData]);
+  }, [user, userLoading, processTasksIntoColumns]);
 
-  // --- Function to handle generate button ---
+  // --- Handler for Generating Schedule ---
   const handleGenerateSchedule = async (data: ScheduleInputData) => {
     setIsGenerating(true);
     setError(null);
-    setScheduleNotes(null); // Clear old notes
-    console.log("Dashboard: Attempting to generate schedule...");
-
+    setScheduleNotes(null);
     try {
       const response = await fetch("/api/generate-schedule", {
-        // Ensure URL is correct
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(data),
       });
-      console.log(`Dashboard: Generate response status: ${response.status}`);
-
-      const result: ScheduleApiResponse = await response.json(); // Try to parse JSON regardless of status for error messages
-
+      const result: ScheduleApiResponse = await response.json();
       if (!response.ok) {
+        // Use notes field from response for error message if available
         throw new Error(
-          result?.message || `HTTP error! status: ${response.status}`
+          result?.notes || `HTTP error! status: ${response.status}`
         );
       }
-
-      console.log("Dashboard: Received generated schedule:", result);
-      processScheduleData(result);
+      setAllTasks(result.tasks || []);
+      setScheduleNotes(result.notes || null);
+      processTasksIntoColumns(result.tasks || []);
     } catch (err: any) {
       console.error("Dashboard: Error generating schedule:", err);
       setError(
         err.message || "An unexpected error occurred during generation."
       );
-      // Optionally clear the board on generation error? Or leave old one?
-      // setScheduleColumns([]);
     } finally {
       setIsGenerating(false);
-      console.log("Dashboard: Finished generating schedule attempt.");
+    }
+  };
+
+  // --- Handler for Toggling Task Completion ---
+  const handleToggleComplete = async (
+    taskId: string,
+    currentStatus: boolean
+  ) => {
+    const newStatus = !currentStatus;
+    const originalTasks = [...allTasks]; // Optimistic UI backup
+
+    // Optimistic UI Update
+    const updatedTasks = allTasks.map((task) =>
+      task.taskId === taskId ? { ...task, isCompleted: newStatus } : task
+    );
+    setAllTasks(updatedTasks);
+    processTasksIntoColumns(updatedTasks); // Update columns based on new task state
+
+    // API Call
+    try {
+      const response = await fetch("/api/update-task", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ taskId, isCompleted: newStatus }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response
+          .json()
+          .catch(() => ({ message: "Update failed." }));
+        throw new Error(errorData.message);
+      }
+      console.log(`Task ${taskId} status updated to ${newStatus}`);
+    } catch (err: any) {
+      console.error("Error updating task status:", err);
+      setError(`Failed to update task: ${err.message}. Reverting.`);
+      // Revert UI on error
+      setAllTasks(originalTasks);
+      processTasksIntoColumns(originalTasks); // Revert columns as well
+    }
+  };
+
+  // --- Handler for Deleting Task ---
+  const handleDeleteTask = async (taskId: string) => {
+    const taskToDelete = allTasks.find((t) => t.taskId === taskId);
+    if (!taskToDelete) return;
+
+    if (
+      !window.confirm(
+        `Are you sure you want to delete task: "${taskToDelete.content}"?`
+      )
+    ) {
+      return;
+    }
+
+    const originalTasks = [...allTasks]; // Optimistic UI backup
+
+    // Optimistic UI Update
+    const updatedTasks = allTasks.filter((task) => task.taskId !== taskId);
+    setAllTasks(updatedTasks);
+    processTasksIntoColumns(updatedTasks); // Update columns
+
+    // API Call
+    try {
+      const response = await fetch(
+        `/api/delete-task?taskId=${encodeURIComponent(taskId)}`,
+        {
+          method: "DELETE",
+        }
+      );
+
+      if (!response.ok) {
+        const errorData = await response
+          .json()
+          .catch(() => ({ message: "Delete failed." }));
+        throw new Error(errorData.message);
+      }
+      console.log(`Task ${taskId} deleted`);
+    } catch (err: any) {
+      console.error("Error deleting task:", err);
+      setError(`Failed to delete task: ${err.message}. Reverting.`);
+      // Revert UI on error
+      setAllTasks(originalTasks);
+      processTasksIntoColumns(originalTasks); // Revert columns
+    }
+  };
+
+  // --- Utility to format timestamp ---
+  const formatTimestamp = (isoString: string | null): string => {
+    if (!isoString) return "";
+    try {
+      // Using locale defaults for better user experience
+      return new Date(isoString).toLocaleString(undefined, {
+        hour: "numeric",
+        minute: "2-digit",
+        // Optional: add more details like day/month if needed
+        // day: 'numeric',
+        // month: 'short',
+      });
+    } catch {
+      return "Invalid Date";
     }
   };
 
   // --- Render Logic ---
-  if (userLoading)
+  // Handle Auth0 loading state first
+  if (userLoading) {
     return (
       <div className="flex justify-center items-center min-h-screen">
         <FaSpinner className="animate-spin text-4xl text-indigo-500" />
-        <span> Loading user...</span>
+        <span> Loading user...</span>
       </div>
     );
-  if (userError)
+  }
+
+  // Handle Auth0 error state
+  if (userError) {
     return (
       <div className="p-10 text-center text-red-500">
         Auth Error: {userError.message}
       </div>
     );
-  // No need for !user check here if using withPageAuthRequired or middleware,
-  // but we'll keep UI structure simple relying on the loading states
+  }
 
   return (
     <main className="min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 p-4 sm:p-8">
@@ -193,7 +276,8 @@ export default function Dashboard() {
         <h1 className="text-2xl sm:text-3xl font-bold text-gray-800">
           Studio<span className="text-indigo-600">Genie</span>
         </h1>
-        {user && (
+        {/* Conditionally render user info or login button */}
+        {user ? (
           <div className="flex items-center space-x-4">
             {user.picture && (
               <img
@@ -212,16 +296,14 @@ export default function Dashboard() {
               Logout
             </a>
           </div>
+        ) : (
+          <a
+            href="/api/auth/login"
+            className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 transition-colors"
+          >
+            Login
+          </a>
         )}
-        {!user &&
-          !userLoading && ( // Show login link if user is loaded and not present
-            <a
-              href="/api/auth/login"
-              className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 transition-colors"
-            >
-              Login
-            </a>
-          )}
       </header>
 
       {/* --- General Error Display --- */}
@@ -252,33 +334,38 @@ export default function Dashboard() {
           <h2 className="text-xl font-semibold mb-4 text-gray-700 border-b pb-2">
             Create Your Schedule
           </h2>
-          <TaskInputForm
-            onSubmit={handleGenerateSchedule}
-            isGenerating={isGenerating}
-          />
+          {/* Render TaskInputForm only if user is logged in */}
+          {user ? (
+            <TaskInputForm
+              onSubmit={handleGenerateSchedule}
+              isGenerating={isGenerating}
+            />
+          ) : (
+            <p className="text-gray-500">Please log in to create a schedule.</p>
+          )}
         </div>
 
         {/* Column 2: Schedule Board */}
         <div className="lg:col-span-2 bg-white p-6 rounded-lg shadow-lg min-h-[60vh]">
           <h2 className="text-xl font-semibold mb-4 text-gray-700 border-b pb-2">
-            Generated Schedule
+            Your Schedule
           </h2>
+
           {/* Loading States */}
           {isLoadingSchedule && (
-            <div className="flex justify-center items-center h-full">
+            <div className="flex justify-center items-center h-64">
               <FaSpinner className="animate-spin text-3xl text-indigo-500" />
               <p className="ml-3 text-gray-600">Loading schedule...</p>
             </div>
           )}
-          {isGenerating &&
-            !isLoadingSchedule && ( // Show only if not initial loading
-              <div className="flex justify-center items-center h-full">
-                <FaSpinner className="animate-spin text-4xl text-indigo-500" />
-                <p className="ml-4 text-lg text-gray-600">
-                  Generating schedule...
-                </p>
-              </div>
-            )}
+          {isGenerating && !isLoadingSchedule && (
+            <div className="flex justify-center items-center h-64">
+              <FaSpinner className="animate-spin text-4xl text-indigo-500" />
+              <p className="ml-4 text-lg text-gray-600">
+                Generating schedule...
+              </p>
+            </div>
+          )}
 
           {/* Schedule Display or Placeholder */}
           {!isLoadingSchedule &&
@@ -288,24 +375,83 @@ export default function Dashboard() {
                 {scheduleColumns.map((column) => (
                   <div
                     key={column.id}
-                    className="bg-gray-100 rounded-lg p-3 min-w-[280px] flex-shrink-0"
+                    className="bg-gray-100 rounded-lg p-3 min-w-[280px] max-w-[320px] flex-shrink-0"
                   >
-                    <h3 className="font-semibold text-gray-700 mb-3 px-1">
+                    <h3 className="font-semibold text-gray-700 mb-3 px-1 sticky top-0 bg-gray-100 py-1">
                       {column.title}
                     </h3>
                     <div className="space-y-3">
                       {column.tasks.map((task) => (
                         <div
-                          key={task.id}
-                          className="bg-white rounded-md p-3 shadow hover:shadow-md transition-shadow cursor-grab"
+                          key={task.taskId}
+                          className={`bg-white rounded-md p-3 shadow hover:shadow-md transition-shadow flex items-start space-x-3 ${
+                            task.isCompleted ? "opacity-60" : ""
+                          }`}
                         >
-                          <p className="text-sm font-medium text-gray-800">
-                            {task.content}
-                          </p>
-                          <p className="text-xs text-gray-500 mt-1">
-                            {task.time}
-                          </p>
-                          {/* Add task notes here if needed */}
+                          {/* Checkbox */}
+                          <button
+                            onClick={() =>
+                              handleToggleComplete(
+                                task.taskId,
+                                task.isCompleted
+                              )
+                            }
+                            className={`flex-shrink-0 mt-1 text-lg ${
+                              task.isCompleted
+                                ? "text-green-500"
+                                : "text-gray-400 hover:text-green-600"
+                            }`}
+                            title={
+                              task.isCompleted
+                                ? "Mark as incomplete"
+                                : "Mark as complete"
+                            }
+                            aria-label={
+                              task.isCompleted
+                                ? "Mark as incomplete"
+                                : "Mark as complete"
+                            }
+                          >
+                            {task.isCompleted ? (
+                              <FaRegCheckSquare />
+                            ) : (
+                              <FaRegSquare />
+                            )}
+                          </button>
+
+                          {/* Task Content */}
+                          <div className="flex-grow min-w-0">
+                            <p
+                              className={`text-sm font-medium text-gray-800 break-words ${
+                                task.isCompleted ? "line-through" : ""
+                              }`}
+                            >
+                              {task.content}
+                            </p>
+                            <p className="text-xs text-gray-500 mt-1">
+                              {task.time}
+                            </p>
+                            {task.timestamp && (
+                              <p className="text-xs text-indigo-500 mt-1">
+                                Starts: {formatTimestamp(task.timestamp)}
+                              </p>
+                            )}
+                            {task.notes && (
+                              <p className="text-xs italic text-gray-400 mt-1 break-words">
+                                Notes: {task.notes}
+                              </p>
+                            )}
+                          </div>
+
+                          {/* Delete Button */}
+                          <button
+                            onClick={() => handleDeleteTask(task.taskId)}
+                            className="flex-shrink-0 text-gray-400 hover:text-red-500 transition-colors p-1 ml-2"
+                            title="Delete task"
+                            aria-label="Delete task"
+                          >
+                            <FaTrashAlt />
+                          </button>
                         </div>
                       ))}
                       {column.tasks.length === 0 && (
@@ -318,14 +464,18 @@ export default function Dashboard() {
                 ))}
               </div>
             )}
+          {/* Placeholder when no tasks */}
           {!isLoadingSchedule &&
             !isGenerating &&
             scheduleColumns.length === 0 && (
-              <div className="flex justify-center items-center h-full text-gray-400">
-                <p>
-                  Enter tasks and generate a schedule, or load your previous
-                  one.
-                </p>
+              <div className="flex justify-center items-center h-64 text-gray-400">
+                {user ? (
+                  <p>
+                    No tasks scheduled yet. Use the form to generate a schedule.
+                  </p>
+                ) : (
+                  <p>Please log in to view or generate your schedule.</p>
+                )}
               </div>
             )}
         </div>
