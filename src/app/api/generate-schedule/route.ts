@@ -83,18 +83,28 @@ export async function POST(req: NextRequest) {
     const response = result.response;
     const jsonText = response.text();
 
-    // 5. Parse Gemini Response (it should already be JSON due to responseMimeType)
+    // 5. Parse Gemini Response
     let scheduleData;
+    const rawJsonText = response.text(); // Get the raw text first
+
     try {
-        scheduleData = JSON.parse(jsonText);
-        // Basic validation - check if 'schedule' key exists and is an array
-         if (!scheduleData || !Array.isArray(scheduleData.schedule)) {
-             console.error("Gemini response validation failed: 'schedule' array missing or not an array.", jsonText);
+        // Clean the text: Remove potential markdown fences and trim whitespace
+        const cleanedJsonText = rawJsonText
+            .replace(/^```json\s*/, '') // Remove ```json at the start
+            .replace(/```\s*$/, '')    // Remove ``` at the end
+            .trim();                   // Remove leading/trailing whitespace
+
+        // Now parse the cleaned text
+        scheduleData = JSON.parse(cleanedJsonText);
+
+        // Basic validation
+        if (!scheduleData || !Array.isArray(scheduleData.schedule)) {
+             console.error("Gemini response validation failed after cleaning: 'schedule' array missing or not an array.", cleanedJsonText);
              throw new Error("AI returned an unexpected schedule format.");
-         }
+        }
     } catch (parseError) {
         console.error('Error parsing Gemini JSON response:', parseError);
-        console.error('Received text from Gemini:', jsonText); // Log what was received
+        console.error('Received raw text from Gemini:', rawJsonText); // Log the original problematic text
         return NextResponse.json({ message: 'Failed to parse AI schedule response.' }, { status: 500 });
     }
 
