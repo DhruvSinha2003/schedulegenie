@@ -1,7 +1,6 @@
 "use client"; // Need this for hooks like useUser
 
 import { useUser } from "@auth0/nextjs-auth0/client";
-import Image from "next/image";
 import Link from "next/link";
 
 export default function Home() {
@@ -25,29 +24,27 @@ export default function Home() {
           {user ? (
             <div className="flex items-center space-x-4">
               {user.picture && (
-                <Image
+                <img
                   src={user.picture}
                   alt={user.name || "User"}
-                  className="rounded-full"
-                  width={32}
-                  height={32}
+                  className="w-8 h-8 rounded-full"
                 />
               )}
               <span>Welcome, {user.name || user.nickname}!</span>
-              <Link
+              <a
                 href="/api/auth/logout"
                 className="px-4 py-2 bg-red-500 text-white rounded hover:bg-red-600 transition-colors"
               >
                 Logout
-              </Link>
+              </a>
             </div>
           ) : (
-            <Link
+            <a
               href="/api/auth/login"
               className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 transition-colors"
             >
               Login
-            </Link>
+            </a>
           )}
         </div>
       </div>
