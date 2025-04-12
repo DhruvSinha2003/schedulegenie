@@ -11,8 +11,8 @@ const RATE_LIMIT_WINDOW_MINUTES = 10;
 
 export async function GET(req: NextRequest) {
     try {
-        // Important: await cookies() before using getSession()
-        const cookieStore = cookies();
+        // Important: await the cookies() function before using it
+        const cookieStore = await cookies();
         const session = await getSession({ req, cookieStore });
         
         if (!session || !session.user) {

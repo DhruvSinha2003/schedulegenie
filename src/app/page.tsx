@@ -40,7 +40,9 @@ export default function Home() {
                       <img
                         src={user.picture}
                         alt={user.name || "User"}
-                        className="w-8 h-8 rounded-full"
+                        width={32}
+                        height={32}
+                        className="rounded-full"
                       />
                     )}
                     <span className="text-gray-700">

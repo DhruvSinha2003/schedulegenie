@@ -3,7 +3,7 @@
 
 import { useUser } from "@auth0/nextjs-auth0/client";
 import Link from "next/link";
-import { useParams, useRouter } from "next/navigation";
+import { useParams, useRouter } from "next/navigation"; // Use next/navigation
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   FaArrowLeft,
@@ -11,9 +11,9 @@ import {
   FaPaperPlane,
   FaSpinner,
 } from "react-icons/fa";
-import ReactMarkdown from "react-markdown"; // Import for markdown support
+import ReactMarkdown from "react-markdown";
 
-// Task structure expected from get-task API
+// Interfaces
 interface Task {
   taskId: string;
   content: string;
@@ -22,18 +22,16 @@ interface Task {
   notes: string | null;
 }
 
-// Chat message structure used locally and sent/received
 interface ChatMessage {
   role: "user" | "model";
   text: string;
 }
 
-// Rate limit status structure
 interface RateLimitStatus {
   remaining: number;
   limit: number;
   windowMinutes: number;
-  resetTime?: string; // Optional timestamp when the window resets
+  resetTime?: string;
 }
 
 export default function ChatPage() {
@@ -52,30 +50,30 @@ export default function ChatPage() {
   const chatEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
-  // Auto-resize textarea based on content
+  // Auto-resize textarea
   const autoResizeTextarea = () => {
     if (textareaRef.current) {
       textareaRef.current.style.height = "auto";
-      textareaRef.current.style.height = `${Math.min(
-        textareaRef.current.scrollHeight,
-        150
-      )}px`;
+      const scrollHeight = textareaRef.current.scrollHeight;
+      textareaRef.current.style.height = `${Math.min(scrollHeight, 150)}px`;
     }
   };
 
-  // Calculate time until rate limit reset
-  const calculateResetTime = useCallback(() => {
-    if (!rateLimit || !rateLimit.windowMinutes) return null;
+  // Calculate estimated reset time
+  const calculateResetTime = useCallback(
+    (windowMinutes: number | undefined) => {
+      if (typeof windowMinutes !== "number") return null;
+      const now = new Date();
+      const resetTime = new Date(now.getTime() + windowMinutes * 60000);
+      return resetTime.toLocaleTimeString([], {
+        hour: "2-digit",
+        minute: "2-digit",
+      });
+    },
+    []
+  );
 
-    const now = new Date();
-    const resetTime = new Date(now.getTime() + rateLimit.windowMinutes * 60000);
-    return resetTime.toLocaleTimeString([], {
-      hour: "2-digit",
-      minute: "2-digit",
-    });
-  }, [rateLimit]);
-
-  // Fetch Task Details
+  // Fetch Task Details Effect
   useEffect(() => {
     const fetchTask = async () => {
       if (!taskId || !user) return;
@@ -91,7 +89,6 @@ export default function ChatPage() {
         }
         const data = await response.json();
         setTask(data.task);
-        // Pre-fill user input
         if (data.task) {
           setUserInput(
             `Regarding my task "${data.task.content}" scheduled for ${data.task.day} at ${data.task.time}: `
@@ -113,15 +110,14 @@ export default function ChatPage() {
     }
   }, [taskId, user, userLoading]);
 
-  // Fetch Rate Limit Status
+  // Fetch Rate Limit Status Function
   const fetchRateLimitStatus = useCallback(async () => {
     if (!user) return;
     try {
       const response = await fetch("/api/chat-status");
       if (response.ok) {
-        const data = await response.json();
-        // Add calculated reset time
-        data.resetTime = calculateResetTime();
+        const data: RateLimitStatus = await response.json();
+        data.resetTime = calculateResetTime(data.windowMinutes);
         setRateLimit(data);
       } else {
         console.warn("Could not fetch rate limit status:", response.status);
@@ -133,24 +129,33 @@ export default function ChatPage() {
     }
   }, [user, calculateResetTime]);
 
+  // Effect for Initial Fetch and Interval for Rate Limit
   useEffect(() => {
-    fetchRateLimitStatus();
-    // Set up an interval to refresh the rate limit status
-    const intervalId = setInterval(fetchRateLimitStatus, 60000); // Every minute
-    return () => clearInterval(intervalId);
-  }, [fetchRateLimitStatus]);
+    if (user) {
+      fetchRateLimitStatus();
+    } // Initial fetch
 
-  // Update textarea height whenever input changes
+    const intervalId = setInterval(() => {
+      if (user) {
+        fetchRateLimitStatus();
+      } // Periodic fetch
+    }, 60000); // Refresh every minute
+
+    return () => clearInterval(intervalId); // Cleanup interval
+    // Depend only on user and the stable fetch function reference
+  }, [user]);
+
+  // Textarea Resize Effect
   useEffect(() => {
     autoResizeTextarea();
   }, [userInput]);
 
-  // Scroll to bottom of chat
+  // Scroll to Bottom Effect
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [chatHistory]);
 
-  // Handle Sending Message
+  // Handle Sending Message Function
   const handleSendMessage = async () => {
     if (!userInput.trim() || isSending || !task || !user) return;
     if (rateLimit && rateLimit.remaining <= 0) {
@@ -181,7 +186,6 @@ export default function ChatPage() {
         role: msg.role,
         parts: [{ text: msg.text }],
       }));
-
       const response = await fetch("/api/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -190,29 +194,32 @@ export default function ChatPage() {
           taskContext: `Task: ${task.content} (${task.day} ${task.time})`,
         }),
       });
-
       const result = await response.json();
 
       if (!response.ok) {
         if (response.status === 429 && result.limitExceeded) {
           setError(result.message || "Rate limit exceeded.");
+          fetchRateLimitStatus();
         } else {
           throw new Error(result.message || "Failed to get response from AI.");
         }
-        setChatHistory((prev) => prev.slice(0, -1));
+        if (!(response.status === 429 && result.limitExceeded)) {
+          setChatHistory((prev) => prev.slice(0, -1)); // Remove user msg on general error
+        }
       } else {
         const aiResponseMessage: ChatMessage = {
           role: "model",
           text: result.response,
         };
         setChatHistory((prev) => [...prev, aiResponseMessage]);
-        fetchRateLimitStatus();
+        fetchRateLimitStatus(); // Update status after successful request
       }
     } catch (err: any) {
       setError(`Error communicating with AI: ${err.message}`);
-      setChatHistory((prev) => prev.slice(0, -1));
+      setChatHistory((prev) => prev.slice(0, -1)); // Remove user msg on error
     } finally {
       setIsSending(false);
+      textareaRef.current?.focus(); // Refocus textarea
     }
   };
 
@@ -297,36 +304,38 @@ export default function ChatPage() {
       <header className="bg-white shadow-md px-6 py-4 flex items-center sticky top-0 z-10 border-b border-gray-200">
         <Link
           href="/dashboard"
-          className="text-gray-600 hover:text-indigo-700 transition-colors p-2 rounded-full hover:bg-indigo-50"
+          className="text-gray-600 hover:text-indigo-700 transition-colors p-2 rounded-full hover:bg-indigo-50 -ml-2"
           title="Back to Dashboard"
         >
           <FaArrowLeft size={20} />
         </Link>
-
         {task && (
-          <div className="ml-4">
-            <h1 className="text-lg font-semibold text-gray-800">
+          <div className="ml-4 flex-grow min-w-0">
+            <h1 className="text-lg font-semibold text-gray-800 truncate">
               AI Assistant
             </h1>
-            <p className="text-sm text-indigo-700 font-medium">
+            <p className="text-sm text-indigo-700 font-medium truncate">
               Task: {task.content} • {task.day} at {task.time}
             </p>
           </div>
         )}
-
-        {/* Display Rate Limit */}
         {rateLimit !== null && (
-          <div className="ml-auto flex flex-col items-end">
-            <div className="flex items-center gap-2 bg-gradient-to-r from-blue-100 to-indigo-100 text-indigo-800 px-3 py-1.5 rounded-full text-sm font-medium">
+          <div className="ml-auto flex-shrink-0 flex flex-col items-end">
+            <div className="flex items-center gap-2 bg-gradient-to-r from-blue-100 to-indigo-100 text-indigo-800 px-3 py-1.5 rounded-full text-xs sm:text-sm font-medium">
               <span className="whitespace-nowrap">
                 {rateLimit.remaining}/{rateLimit.limit} requests
               </span>
               <div className="relative group">
                 <FaInfoCircle className="text-indigo-500 cursor-help" />
-                <div className="absolute right-0 w-64 p-3 mt-2 bg-white rounded-md shadow-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 z-50 text-xs text-gray-700">
-                  <p>Limits reset every {rateLimit.windowMinutes} minutes.</p>
+                <div className="absolute right-0 w-64 p-3 mt-2 bg-white rounded-md shadow-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 z-50 text-xs text-gray-700 border border-gray-200">
+                  <p>
+                    Limit: {rateLimit.limit} chat requests per{" "}
+                    {rateLimit.windowMinutes} minutes.
+                  </p>
                   {rateLimit.resetTime && (
-                    <p className="mt-1">Next reset: ~{rateLimit.resetTime}</p>
+                    <p className="mt-1 font-medium">
+                      Next window reset: ~{rateLimit.resetTime}
+                    </p>
                   )}
                 </div>
               </div>
@@ -381,7 +390,7 @@ export default function ChatPage() {
 
       {/* Chat History */}
       <div className="flex-grow overflow-y-auto p-6 space-y-6">
-        {chatHistory.length === 0 && (
+        {chatHistory.length === 0 && !isSending && (
           <div className="flex justify-center items-center h-full">
             <div className="text-center text-gray-500 max-w-md">
               <h3 className="text-xl font-medium mb-2">
@@ -394,7 +403,6 @@ export default function ChatPage() {
             </div>
           </div>
         )}
-
         {chatHistory.map((msg, index) => (
           <div
             key={index}
@@ -407,17 +415,10 @@ export default function ChatPage() {
                 msg.role === "user"
                   ? "bg-indigo-600 text-white"
                   : "bg-white text-gray-800 border border-gray-200"
-              } ${
-                index > 0 && chatHistory[index - 1].role === msg.role
-                  ? msg.role === "user"
-                    ? "mr-4"
-                    : "ml-4"
-                  : ""
               }`}
             >
-              {/* Markdown rendering for AI responses */}
               {msg.role === "model" ? (
-                <div className="prose prose-sm max-w-none">
+                <div className="prose prose-sm max-w-none prose-p:my-2 prose-ul:my-2 prose-ol:my-2">
                   <ReactMarkdown>{msg.text}</ReactMarkdown>
                 </div>
               ) : (
@@ -426,7 +427,6 @@ export default function ChatPage() {
             </div>
           </div>
         ))}
-        {/* Typing indicator when AI is responding */}
         {isSending && (
           <div className="flex justify-start">
             <div className="bg-white text-gray-800 px-4 py-3 rounded-2xl shadow-sm border border-gray-200 ml-4">
@@ -448,7 +448,7 @@ export default function ChatPage() {
       </div>
 
       {/* Input Area */}
-      <div className="bg-white p-5 border-t border-gray-200 sticky bottom-0 shadow-md">
+      <div className="bg-white p-5 border-t border-gray-200 sticky bottom-0 shadow-[0_-2px_5px_-1px_rgba(0,0,0,0.05)]">
         <div className="max-w-4xl mx-auto">
           <div className="flex items-start space-x-3">
             <div className="flex-grow flex flex-col">
@@ -456,8 +456,12 @@ export default function ChatPage() {
                 ref={textareaRef}
                 value={userInput}
                 onChange={(e) => setUserInput(e.target.value)}
-                placeholder="Ask the AI for help with your task..."
-                className="w-full p-3 border border-gray-300 rounded-lg resize-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 disabled:bg-gray-100 transition-all"
+                placeholder={
+                  rateLimit?.remaining === 0
+                    ? "Rate limit reached..."
+                    : "Ask the AI for help..."
+                }
+                className="w-full p-3 border border-gray-300 rounded-lg resize-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 disabled:bg-gray-100 disabled:cursor-not-allowed transition-all"
                 style={{ minHeight: "48px", maxHeight: "150px" }}
                 disabled={
                   isSending || (rateLimit !== null && rateLimit.remaining <= 0)
@@ -468,10 +472,11 @@ export default function ChatPage() {
                     handleSendMessage();
                   }
                 }}
+                rows={1}
               />
               {rateLimit && rateLimit.remaining <= 0 && (
                 <p className="text-xs text-red-500 mt-1 mb-0">
-                  Rate limit reached
+                  Rate limit reached. Wait until ~{rateLimit.resetTime}.
                 </p>
               )}
             </div>
@@ -483,7 +488,8 @@ export default function ChatPage() {
                 (rateLimit !== null && rateLimit.remaining <= 0)
               }
               className="bg-indigo-600 hover:bg-indigo-700 text-white font-medium px-5 py-3 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center transition-colors self-start"
-              style={{ minWidth: "84px", height: "48px" }}
+              style={{ height: "48px" }}
+              title="Send message"
             >
               {isSending ? (
                 <FaSpinner className="animate-spin" />
