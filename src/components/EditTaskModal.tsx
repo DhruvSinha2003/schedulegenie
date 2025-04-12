@@ -53,8 +53,12 @@ export default function EditTaskModal({
       try {
         await onSave(task.taskId, updates);
         onClose();
-      } catch (err: any) {
-        setError(err.message || "Failed to save task.");
+      } catch (err) {
+        if (err instanceof Error) {
+          setError(err.message);
+        } else {
+          setError("Failed to save task.");
+        }
       } finally {
         setIsSaving(false);
       }

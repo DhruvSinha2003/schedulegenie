@@ -37,9 +37,7 @@ export default function TaskCard({
       if (!isNaN(date.getTime()) && !/^\d+$/.test(task.day.trim())) {
         return date.toLocaleDateString("en-US", { weekday: "short" });
       }
-    } catch (e) {
-      /* Ignore */
-    }
+    } catch {}
     return "";
   }, [task.day]);
 

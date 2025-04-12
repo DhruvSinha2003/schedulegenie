@@ -10,6 +10,12 @@ interface ScheduleInput {
   flexibility: "rigid" | "flexible";
 }
 
+/* eslint-disable @typescript-eslint/no-explicit-any */
+type SpeechRecognition = any;
+type SpeechRecognitionEvent = any;
+type SpeechRecognitionErrorEvent = any;
+/* eslint-enable @typescript-eslint/no-explicit-any */
+
 interface TaskInputFormProps {
   onSubmit: (data: ScheduleInput) => void;
   isGenerating: boolean;
@@ -18,8 +24,10 @@ interface TaskInputFormProps {
 // Declare SpeechRecognition types for window object
 declare global {
   interface Window {
-    SpeechRecognition: typeof SpeechRecognition;
-    webkitSpeechRecognition: typeof SpeechRecognition;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    SpeechRecognition: any;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    webkitSpeechRecognition: any;
   }
 }
 
@@ -128,8 +136,7 @@ export default function TaskInputForm({
       } catch (error) {
         console.error("Error stopping recognition:", error);
       } finally {
-        // onend handler should set isListening to false
-        // setIsListening(false); // Let onend handle this
+        setIsListening(false);
       }
     }
   };
@@ -141,7 +148,6 @@ export default function TaskInputForm({
       alert("Please provide your tasks and availability.");
       return;
     }
-    // Ensure listening is stopped before submitting
     if (isListening) {
       stopListening();
     }
@@ -160,7 +166,7 @@ export default function TaskInputForm({
           htmlFor="tasks"
           className="block text-sm font-medium text-gray-700 mb-1"
         >
-          Tasks (One per line or dictate)
+          Tasks
         </label>
         <div className="relative">
           <textarea
@@ -169,19 +175,25 @@ export default function TaskInputForm({
             rows={6}
             value={tasks}
             onChange={(e) => setTasks(e.target.value)}
-            placeholder="e.g., Finish project report\nTeam meeting at 2pm\nCall client about proposal"
+            placeholder={
+              "e.g., Finish project report" +
+              String.fromCharCode(10) +
+              "Team meeting at 2pm" +
+              String.fromCharCode(10) +
+              "Call client about proposal"
+            }
             className="w-full px-3 py-2 pr-12 border border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm disabled:bg-gray-100"
-            disabled={isGenerating || isListening} // Disable textarea while listening too
+            disabled={isGenerating || isListening}
           />
           {speechApiSupported && (
             <button
               type="button"
               onClick={isListening ? stopListening : startListening}
-              disabled={isGenerating} // Only disable based on generation, not speech support itself
+              disabled={isGenerating}
               title={isListening ? "Stop Dictating" : "Dictate Tasks"}
               className={`absolute bottom-2 right-2 p-2 rounded-full text-white transition-colors ${
                 isListening
-                  ? "bg-red-500 hover:bg-red-600 animate-pulse" // Pulse when listening
+                  ? "bg-red-500 hover:bg-red-600 animate-pulse"
                   : "bg-purple-500 hover:bg-purple-600"
               } disabled:opacity-50 disabled:cursor-not-allowed`}
             >
@@ -224,8 +236,8 @@ export default function TaskInputForm({
           disabled={isGenerating}
         />
         <p className="text-xs text-gray-500 mt-1">
-          Be descriptive (days, times). e.g., "Weekdays 10am to 4pm, except Wed
-          morning"
+          Be descriptive (days, times). e.g., Weekdays 10am to 4pm, except Wed
+          morning
         </p>
       </div>
 
