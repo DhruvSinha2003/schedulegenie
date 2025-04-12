@@ -198,56 +198,41 @@ export default function Dashboard() {
     currentStatus: boolean
   ) => {
     if (!user) return;
+    const originalTasks = [...allTasks]; // Backup for potential revert
+    const newStatus = !currentStatus;
+
+    // Optimistic UI update
+    const updatedTasksOptimistic = originalTasks.map((task) =>
+      task.taskId === taskId ? { ...task, isCompleted: newStatus } : task
+    );
+    setAllTasks(updatedTasksOptimistic);
+    processTasksIntoColumns(updatedTasksOptimistic); // Update columns view
+    setError(null); // Clear previous errors
 
     try {
-      // Optimistic update
-      setAllTasks((prevTasks) =>
-        prevTasks.map((task) =>
-          task.taskId === taskId
-            ? { ...task, isCompleted: !currentStatus }
-            : task
-        )
-      );
-
-      // Also update in columns
-      processTasksIntoColumns(
-        allTasks.map((task) =>
-          task.taskId === taskId
-            ? { ...task, isCompleted: !currentStatus }
-            : task
-        )
-      );
-
-      // Server update
-      const response = await fetch(`/api/update-task/${taskId}`, {
+      // *** FIX: Send PATCH to correct URL with body ***
+      const response = await fetch(`/api/update-task`, {
+        // URL is just /api/update-task
         method: "PATCH",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ isCompleted: !currentStatus }),
+        headers: { "Content-Type": "application/json" },
+        // Send taskId and new status in the BODY
+        body: JSON.stringify({ taskId: taskId, isCompleted: newStatus }),
       });
 
       if (!response.ok) {
-        // Revert on failure
-        setAllTasks((prevTasks) =>
-          prevTasks.map((task) =>
-            task.taskId === taskId
-              ? { ...task, isCompleted: currentStatus }
-              : task
-          )
-        );
-        processTasksIntoColumns(
-          allTasks.map((task) =>
-            task.taskId === taskId
-              ? { ...task, isCompleted: currentStatus }
-              : task
-          )
-        );
-        throw new Error("Failed to update task");
+        const errorData = await response
+          .json()
+          .catch(() => ({ message: "Failed to update task on server." }));
+        throw new Error(errorData.message || "Server error updating task.");
       }
+      // Success - UI is already updated optimistically
+      console.log(`Task ${taskId} updated successfully to ${newStatus}`);
     } catch (err: any) {
       console.error("Error updating task:", err);
-      setError("Could not update task: " + err.message);
+      setError("Could not update task: " + err.message + ". Reverting.");
+      // Revert UI on failure
+      setAllTasks(originalTasks);
+      processTasksIntoColumns(originalTasks);
     }
   };
 
@@ -255,26 +240,52 @@ export default function Dashboard() {
   const handleDeleteTask = async (taskId: string) => {
     if (!user) return;
 
-    try {
-      // Optimistic update
-      const updatedTasks = allTasks.filter((task) => task.taskId !== taskId);
-      setAllTasks(updatedTasks);
-      processTasksIntoColumns(updatedTasks);
+    const taskToDelete = allTasks.find((t) => t.taskId === taskId);
+    if (!taskToDelete) return;
 
-      // Server update
-      const response = await fetch(`/api/delete-task/${taskId}`, {
-        method: "DELETE",
-      });
+    // Confirmation Dialog
+    if (
+      !window.confirm(
+        `Are you sure you want to delete task: "${taskToDelete.content}"?`
+      )
+    ) {
+      return;
+    }
+
+    const originalTasks = [...allTasks]; // Backup for revert
+
+    // Optimistic UI update
+    const updatedTasksOptimistic = originalTasks.filter(
+      (task) => task.taskId !== taskId
+    );
+    setAllTasks(updatedTasksOptimistic);
+    processTasksIntoColumns(updatedTasksOptimistic);
+    setError(null); // Clear previous errors
+
+    try {
+      // *** FIX: Send DELETE to correct URL with query parameter ***
+      const response = await fetch(
+        `/api/delete-task?taskId=${encodeURIComponent(taskId)}`,
+        {
+          // URL includes query param
+          method: "DELETE",
+        }
+      );
 
       if (!response.ok) {
-        // Revert on failure
-        setAllTasks(allTasks);
-        processTasksIntoColumns(allTasks);
-        throw new Error("Failed to delete task");
+        const errorData = await response
+          .json()
+          .catch(() => ({ message: "Failed to delete task on server." }));
+        throw new Error(errorData.message || "Server error deleting task.");
       }
+      // Success - UI is already updated
+      console.log(`Task ${taskId} deleted successfully`);
     } catch (err: any) {
       console.error("Error deleting task:", err);
-      setError("Could not delete task: " + err.message);
+      setError("Could not delete task: " + err.message + ". Reverting.");
+      // Revert UI on failure
+      setAllTasks(originalTasks);
+      processTasksIntoColumns(originalTasks);
     }
   };
 
