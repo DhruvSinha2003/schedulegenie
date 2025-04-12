@@ -1,8 +1,9 @@
 // components/TaskCard.tsx
 "use client";
 
-import { Task } from "@/types/task"; // Assuming you have a types file
+import { Task } from "@/types/task";
 import Link from "next/link";
+import { useMemo } from "react"; // Import useMemo
 import {
   FaEdit,
   FaRegCheckSquare,
@@ -16,8 +17,8 @@ interface TaskCardProps {
   task: Task;
   onToggleComplete: (taskId: string, currentStatus: boolean) => Promise<void>;
   onDelete: (taskId: string) => Promise<void>;
-  onEdit: (task: Task) => void; // Function to open the edit modal
-  isPending: boolean; // True if toggle/delete/edit is in progress for this task
+  onEdit: (task: Task) => void;
+  isPending: boolean;
 }
 
 export default function TaskCard({
@@ -27,22 +28,29 @@ export default function TaskCard({
   onEdit,
   isPending,
 }: TaskCardProps) {
+  // Calculate display day name using useMemo for efficiency
+  const displayDayName = useMemo(() => {
+    try {
+      const date = new Date(task.day);
+      // Check if the date is valid AND the input wasn't *just* a number (like '2024')
+      if (!isNaN(date.getTime()) && !/^\d+$/.test(task.day.trim())) {
+        return date.toLocaleDateString("en-US", { weekday: "short" }); // e.g., "Mon"
+      }
+    } catch (e) {
+      // Ignore errors, means task.day is not a standard parsable date string
+    }
+    // If not a valid date, return empty string (or could try matching 'Monday', 'Tuesday' etc.)
+    return "";
+  }, [task.day]);
+
   const handleToggle = () => {
-    if (!isPending) {
-      onToggleComplete(task.taskId, task.isCompleted);
-    }
+    if (!isPending) onToggleComplete(task.taskId, task.isCompleted);
   };
-
   const handleDelete = () => {
-    if (!isPending) {
-      onDelete(task.taskId);
-    }
+    if (!isPending) onDelete(task.taskId);
   };
-
   const handleEdit = () => {
-    if (!isPending) {
-      onEdit(task);
-    }
+    if (!isPending) onEdit(task);
   };
 
   return (
@@ -86,7 +94,9 @@ export default function TaskCard({
           {task.content}
         </p>
         <p className="text-xs text-gray-500 mt-1">
-          {task.day} • {task.time} {/* Display Day and Time */}
+          {/* Display calculated day name if available, then original day/date */}
+          {displayDayName ? `${displayDayName}, ` : ""}
+          {task.day} • {task.time}
         </p>
         {task.notes && (
           <p className="text-xs italic text-gray-400 mt-1 break-words">
@@ -112,12 +122,14 @@ export default function TaskCard({
             </button>
             <Link
               href={`/chat/${task.taskId}`}
-              className="text-blue-500 hover:text-blue-700 transition-colors p-1"
+              className={`text-blue-500 hover:text-blue-700 transition-colors p-1 ${
+                isPending ? "pointer-events-none opacity-50" : ""
+              }`}
               title="Get AI help with this task"
               aria-label="AI Assistant Chat"
               onClick={(e) => {
                 if (isPending) e.preventDefault();
-              }} // Prevent navigation if pending
+              }}
               aria-disabled={isPending}
               tabIndex={isPending ? -1 : 0}
             >

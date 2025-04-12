@@ -3,19 +3,20 @@
 
 import { useUser } from "@auth0/nextjs-auth0/client";
 import Link from "next/link";
-import { useParams, useRouter } from "next/navigation";
+import { useParams } from "next/navigation"; // Removed useRouter as it wasn't used
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   FaArrowLeft,
   FaInfoCircle,
   FaPaperPlane,
   FaSpinner,
-  FaTimes, // For closing error
+  FaTimes,
 } from "react-icons/fa";
 import ReactMarkdown from "react-markdown";
-import remarkGfm from "remark-gfm"; // For markdown tables, etc.
+import remarkGfm from "remark-gfm";
 
-// Interfaces
+// Interfaces (assuming Task type is imported or defined)
+// import { Task } from "@/types/task";
 interface Task {
   taskId: string;
   content: string;
@@ -23,23 +24,21 @@ interface Task {
   time: string;
   notes: string | null;
 }
-
 interface ChatMessage {
   role: "user" | "model";
   text: string;
 }
-
 interface RateLimitStatus {
   remaining: number;
   limit: number;
   windowMinutes: number;
-  resetTime?: string; // Optional calculated reset time string
+  resetTime?: string;
 }
 
 export default function ChatPage() {
   const { user, isLoading: userLoading, error: userError } = useUser();
   const params = useParams();
-  const router = useRouter();
+  // const router = useRouter(); // Removed if not used
   const taskId = params.taskId as string;
 
   const [task, setTask] = useState<Task | null>(null);
@@ -54,10 +53,10 @@ export default function ChatPage() {
 
   // Auto-resize textarea
   const autoResizeTextarea = () => {
+    // ... (logic remains the same) ...
     if (textareaRef.current) {
-      textareaRef.current.style.height = "auto"; // Reset height
+      textareaRef.current.style.height = "auto";
       const scrollHeight = textareaRef.current.scrollHeight;
-      // Set height based on scroll height, capped at a max height (e.g., 150px)
       textareaRef.current.style.height = `${Math.min(scrollHeight, 150)}px`;
     }
   };
@@ -65,10 +64,9 @@ export default function ChatPage() {
   // Calculate estimated reset time
   const calculateResetTime = useCallback(
     (windowMinutes: number | undefined): string | null => {
+      // ... (logic remains the same) ...
       if (typeof windowMinutes !== "number" || windowMinutes <= 0) return null;
       const now = new Date();
-      // Estimate reset time based on the window length from *now*
-      // Note: This is an estimate, the actual server window might have started earlier.
       const resetTime = new Date(now.getTime() + windowMinutes * 60 * 1000);
       return resetTime.toLocaleTimeString([], {
         hour: "2-digit",
@@ -80,6 +78,7 @@ export default function ChatPage() {
 
   // Fetch Task Details Effect
   useEffect(() => {
+    // ... (logic remains the same) ...
     const fetchTask = async () => {
       if (!taskId || !user) return;
       setTaskLoading(true);
@@ -99,7 +98,6 @@ export default function ChatPage() {
           throw new Error("Task data not found in response.");
         }
         setTask(data.task);
-        // Pre-fill input with task context only if chat history is empty
         if (chatHistory.length === 0) {
           setUserInput(
             `Regarding my task "${data.task.content}" scheduled for ${data.task.day} at ${data.task.time}: `
@@ -107,60 +105,54 @@ export default function ChatPage() {
         }
       } catch (err: any) {
         setError(`Error loading task: ${err.message}`);
-        setTask(null); // Ensure task is null on error
+        setTask(null);
       } finally {
         setTaskLoading(false);
       }
     };
-
     if (!userLoading && user) {
       fetchTask();
     } else if (!userLoading && !user) {
       setError("Please log in to use the chat feature.");
       setTaskLoading(false);
     }
-    // Intentionally excluding chatHistory from dependencies to avoid re-fetching task on message send
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [taskId, user, userLoading]);
 
   // Fetch Rate Limit Status Function
   const fetchRateLimitStatus = useCallback(async () => {
+    // ... (logic remains the same) ...
     if (!user) return;
     try {
       const response = await fetch("/api/chat-status");
       if (response.ok) {
         const data: RateLimitStatus = await response.json();
-        // Calculate reset time locally for display purposes
         data.resetTime = calculateResetTime(data.windowMinutes);
         setRateLimit(data);
-        // If limit was reached and now it's not, clear the error
         if (error?.includes("Rate limit reached") && data.remaining > 0) {
           setError(null);
         }
       } else {
-        // Handle non-ok responses if needed, e.g., log or show generic error
-        setRateLimit(null); // Reset or keep previous state? Resetting might be safer.
+        setRateLimit(null);
       }
     } catch (err) {
-      // Network error, etc.
       setRateLimit(null);
     }
-  }, [user, calculateResetTime, error]); // Include error dependency to clear rate limit error
+  }, [user, calculateResetTime, error]);
 
   // Effect for Initial Fetch and Interval for Rate Limit
   useEffect(() => {
+    // ... (logic remains the same) ...
     if (user) {
-      fetchRateLimitStatus(); // Initial fetch
+      fetchRateLimitStatus();
     }
-
     const intervalId = setInterval(() => {
       if (user) {
-        fetchRateLimitStatus(); // Periodic fetch
+        fetchRateLimitStatus();
       }
-    }, 60000); // Refresh every minute
-
-    return () => clearInterval(intervalId); // Cleanup interval
-  }, [user, fetchRateLimitStatus]); // Depend on user and the stable fetch function reference
+    }, 60000);
+    return () => clearInterval(intervalId);
+  }, [user, fetchRateLimitStatus]);
 
   // Textarea Resize Effect
   useEffect(() => {
@@ -169,7 +161,6 @@ export default function ChatPage() {
 
   // Scroll to Bottom Effect
   useEffect(() => {
-    // Scroll down smoothly, maybe slightly delayed to allow rendering
     setTimeout(() => {
       chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
     }, 100);
@@ -177,87 +168,69 @@ export default function ChatPage() {
 
   // Handle Sending Message Function
   const handleSendMessage = async () => {
+    // ... (logic remains the same) ...
     const trimmedInput = userInput.trim();
     if (!trimmedInput || isSending || !task || !user) return;
-
-    // Check rate limit before sending
     if (rateLimit && rateLimit.remaining <= 0) {
       setError(
         `Rate limit reached. Please wait until ${
           rateLimit.resetTime || "later"
         }. Limit: ${rateLimit.limit}/${rateLimit.windowMinutes} min.`
       );
-      fetchRateLimitStatus(); // Re-fetch status immediately
+      fetchRateLimitStatus();
       return;
     }
-
     const newUserMessage: ChatMessage = { role: "user", text: trimmedInput };
     const currentHistory = [...chatHistory, newUserMessage];
-
-    setChatHistory(currentHistory); // Optimistic UI update for user message
-    setUserInput(""); // Clear input immediately
+    setChatHistory(currentHistory);
+    setUserInput("");
     setIsSending(true);
-    setError(null); // Clear previous errors
-
+    setError(null);
     try {
-      // Format history for the API
       const apiHistory = currentHistory.map((msg) => ({
         role: msg.role,
         parts: [{ text: msg.text }],
       }));
-
       const response = await fetch("/api/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          history: apiHistory,
-          // Optionally add task context if needed, but history should suffice
-          // taskContext: `Task: ${task.content} (${task.day} ${task.time})`,
-        }),
+        body: JSON.stringify({ history: apiHistory }),
       });
-
       const result = await response.json();
-
       if (!response.ok) {
-        // Specific handling for rate limit error
         if (response.status === 429 && result.limitExceeded) {
           setError(
             result.message || "Rate limit exceeded. Please try again later."
           );
-          fetchRateLimitStatus(); // Update rate limit state immediately
+          fetchRateLimitStatus();
         } else {
-          // General error
           throw new Error(
             result.message || `Request failed with status ${response.status}`
           );
         }
-        // Don't remove user message for rate limit error, only for other errors
         if (!(response.status === 429 && result.limitExceeded)) {
-          // Revert optimistic user message on general error
           setChatHistory((prev) => prev.slice(0, -1));
         }
       } else {
-        // Success
         const aiResponseMessage: ChatMessage = {
           role: "model",
           text: result.response,
         };
         setChatHistory((prev) => [...prev, aiResponseMessage]);
-        fetchRateLimitStatus(); // Update status after successful request
+        fetchRateLimitStatus();
       }
     } catch (err: any) {
       setError(`Error communicating with AI: ${err.message}`);
-      // Revert optimistic user message on network or unexpected errors
       setChatHistory((prev) => prev.slice(0, -1));
     } finally {
       setIsSending(false);
-      // Ensure textarea gets focus after sending/error
       setTimeout(() => textareaRef.current?.focus(), 0);
     }
   };
 
   // --- Render Logic ---
   if (userLoading || taskLoading) {
+    /* ... loading spinner ... */
     return (
       <div className="flex justify-center items-center min-h-screen bg-gradient-to-br from-blue-50 to-indigo-50">
         <div className="bg-white p-8 rounded-lg shadow-md flex flex-col items-center">
@@ -267,8 +240,8 @@ export default function ChatPage() {
       </div>
     );
   }
-
   if (userError) {
+    /* ... auth error ... */
     return (
       <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-50 flex justify-center items-center p-4">
         <div className="bg-white p-8 rounded-lg shadow-lg max-w-md w-full text-center">
@@ -286,8 +259,8 @@ export default function ChatPage() {
       </div>
     );
   }
-
   if (!user) {
+    /* ... login required ... */
     return (
       <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-50 flex justify-center items-center p-4">
         <div className="bg-white p-8 rounded-lg shadow-lg max-w-md w-full text-center">
@@ -305,8 +278,8 @@ export default function ChatPage() {
       </div>
     );
   }
-
   if (!task && !taskLoading) {
+    /* ... task not found ... */
     return (
       <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-50 flex justify-center items-center p-4">
         <div className="bg-white p-8 rounded-lg shadow-lg max-w-md w-full text-center">
@@ -333,6 +306,7 @@ export default function ChatPage() {
     <div className="flex flex-col h-screen bg-gradient-to-r from-blue-50 to-indigo-50">
       {/* Header */}
       <header className="bg-white shadow-md px-4 sm:px-6 py-3 flex items-center sticky top-0 z-20 border-b border-gray-200">
+        {/* ... header content remains the same ... */}
         <Link
           href="/dashboard"
           className="text-gray-600 hover:text-indigo-700 transition-colors p-2 rounded-full hover:bg-indigo-50 -ml-2 mr-2"
@@ -342,8 +316,6 @@ export default function ChatPage() {
         </Link>
         {task && (
           <div className="flex-grow min-w-0">
-            {" "}
-            {/* Prevent text overflow */}
             <h1 className="text-lg font-semibold text-gray-800 truncate">
               AI Assistant
             </h1>
@@ -382,17 +354,16 @@ export default function ChatPage() {
 
       {/* Error Display */}
       {error && (
-        <div className="sticky top-[65px] z-10 p-0 mx-4 sm:mx-6 mt-3">
+        <div className="sticky top-[65px] z-10 p-0 mx-4 sm:mx-6 lg:mx-10 xl:mx-16 mt-3">
           {" "}
-          {/* Adjust top based on header height */}
+          {/* Adjusted top & added more horizontal margin for centering */}
           <div
             className="p-3 bg-red-100 border border-red-400 text-red-700 rounded-md shadow-sm text-sm flex items-center justify-between"
             role="alert"
           >
-            <div className="flex items-center">
-              {/* Optional: Icon */}
+            <div className="flex items-center mr-2">
               <svg
-                className="h-5 w-5 text-red-500 mr-2"
+                className="h-5 w-5 text-red-500 mr-2 flex-shrink-0"
                 fill="currentColor"
                 viewBox="0 0 20 20"
               >
@@ -408,7 +379,7 @@ export default function ChatPage() {
             </div>
             <button
               onClick={() => setError(null)}
-              className="ml-3 text-red-500 hover:text-red-700 p-1 rounded-full hover:bg-red-200"
+              className="ml-auto text-red-500 hover:text-red-700 p-1 rounded-full hover:bg-red-200 flex-shrink-0"
               aria-label="Dismiss error"
             >
               <FaTimes size={16} />
@@ -417,8 +388,8 @@ export default function ChatPage() {
         </div>
       )}
 
-      {/* Chat History - Added padding px-4 sm:px-6 */}
-      <div className="flex-grow overflow-y-auto py-6 px-4 sm:px-6 space-y-4">
+      {/* Chat History - Increased padding for centering effect */}
+      <div className="flex-grow overflow-y-auto py-6 px-6 sm:px-10 md:px-16 lg:px-24 space-y-4">
         {chatHistory.length === 0 && !isSending && (
           <div className="flex justify-center items-center h-full">
             <div className="text-center text-gray-500 max-w-md">
@@ -439,31 +410,32 @@ export default function ChatPage() {
               msg.role === "user" ? "justify-end" : "justify-start"
             }`}
           >
+            {/* Bubble container with max-width */}
             <div
-              className={`max-w-lg lg:max-w-xl px-4 py-2 rounded-xl shadow-sm ${
+              className={`max-w-xl lg:max-w-2xl rounded-xl shadow-sm ${
                 msg.role === "user"
                   ? "bg-indigo-600 text-white"
                   : "bg-white text-gray-800 border border-gray-200"
               }`}
             >
-              {msg.role === "model" ? (
-                // Added break-words and overflow-x-hidden here for safety
-                <div className="prose prose-sm max-w-none prose-p:my-1 prose-ul:my-1 prose-ol:my-1 break-words overflow-x-hidden">
-                  <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                    {msg.text}
-                  </ReactMarkdown>
-                </div>
-              ) : (
-                // Added break-words here
-                <p className="whitespace-pre-wrap break-words">{msg.text}</p>
-              )}
+              {/* Inner container for padding and overflow scrolling */}
+              <div className="px-4 py-2 overflow-x-auto">
+                {msg.role === "model" ? (
+                  <div className="prose prose-sm max-w-none prose-p:my-1 prose-ul:my-1 prose-ol:my-1 break-words">
+                    <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                      {msg.text}
+                    </ReactMarkdown>
+                  </div>
+                ) : (
+                  <p className="whitespace-pre-wrap break-words">{msg.text}</p>
+                )}
+              </div>
             </div>
           </div>
         ))}
         {isSending && (
           <div className="flex justify-start">
             <div className="bg-white text-gray-800 px-4 py-3 rounded-xl shadow-sm border border-gray-200">
-              {/* Simple loading dots */}
               <div className="flex space-x-1.5">
                 <div className="w-2 h-2 rounded-full bg-gray-400 animate-bounce"></div>
                 <div
@@ -478,12 +450,13 @@ export default function ChatPage() {
             </div>
           </div>
         )}
-        <div ref={chatEndRef} className="h-1" /> {/* Anchor for scrolling */}
+        <div ref={chatEndRef} className="h-1" />
       </div>
 
       {/* Input Area */}
       <div className="bg-white p-4 border-t border-gray-200 sticky bottom-0 shadow-[0_-2px_5px_-1px_rgba(0,0,0,0.05)]">
-        <div className="max-w-4xl mx-auto">
+        {/* Centering the input bar itself with max-width */}
+        <div className="max-w-3xl mx-auto">
           <div className="flex items-start space-x-3">
             <div className="flex-grow flex flex-col">
               <textarea
@@ -500,7 +473,7 @@ export default function ChatPage() {
                   minHeight: "48px",
                   maxHeight: "150px",
                   overflowY: "auto",
-                }} // Ensure scroll appears if needed
+                }}
                 disabled={
                   isSending || (rateLimit !== null && rateLimit.remaining <= 0)
                 }
@@ -510,11 +483,12 @@ export default function ChatPage() {
                     handleSendMessage();
                   }
                 }}
-                rows={1} // Start with 1 row, auto-resize will handle expansion
+                rows={1}
               />
               {rateLimit && rateLimit.remaining <= 0 && (
                 <p className="text-xs text-red-500 mt-1 mb-0 px-1">
-                  Rate limit reached. Wait until ~{rateLimit.resetTime}.
+                  {" "}
+                  Rate limit reached. Wait until ~{rateLimit.resetTime}.{" "}
                 </p>
               )}
             </div>
@@ -525,8 +499,8 @@ export default function ChatPage() {
                 !userInput.trim() ||
                 (rateLimit !== null && rateLimit.remaining <= 0)
               }
-              className="bg-indigo-600 hover:bg-indigo-700 text-white font-medium px-4 py-2 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center transition-colors self-start"
-              style={{ height: "48px", width: "48px" }} // Fixed size for button
+              className="bg-indigo-600 hover:bg-indigo-700 text-white font-medium px-4 py-2 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center transition-colors self-start flex-shrink-0" // Added flex-shrink-0
+              style={{ height: "48px", width: "48px" }}
               title="Send message"
             >
               {isSending ? (

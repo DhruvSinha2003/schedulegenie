@@ -8,7 +8,7 @@ import { Task } from "@/types/task";
 import { useUser } from "@auth0/nextjs-auth0/client";
 import Image from "next/image";
 import Link from "next/link";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react"; // Added useMemo
+import { useEffect, useMemo, useRef, useState } from "react";
 import { FaSpinner } from "react-icons/fa";
 
 // --- Interfaces ---
@@ -31,7 +31,6 @@ interface ScheduleApiResponse {
 export default function Dashboard() {
   const { user, isLoading: userLoading, error: userError } = useUser();
   const [allTasks, setAllTasks] = useState<Task[]>([]);
-  // REMOVED: const [scheduleColumns, setScheduleColumns] = useState<ScheduleColumn[]>([]);
   const [isGenerating, setIsGenerating] = useState(false);
   const [isLoadingSchedule, setIsLoadingSchedule] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -41,12 +40,13 @@ export default function Dashboard() {
   const [pendingTaskActions, setPendingTaskActions] = useState<
     Record<string, "toggle" | "delete" | "edit">
   >({});
+  const [formKey, setFormKey] = useState<number>(0); // Key to reset the form
 
+  const notesTimerRef = useRef<NodeJS.Timeout | null>(null); // Ref for notes timer
   const hasFetchedRef = useRef(false);
 
   const dayOrder: { [key: string]: number } = useMemo(
     () => ({
-      // useMemo for stable definition if ever needed elsewhere
       sunday: 0,
       monday: 1,
       tuesday: 2,
@@ -58,14 +58,10 @@ export default function Dashboard() {
     []
   );
 
-  // --- Calculate schedule columns directly using useMemo ---
+  // Calculate schedule columns directly using useMemo
   const scheduleColumns = useMemo(() => {
-    if (!allTasks || allTasks.length === 0) {
-      return [];
-    }
+    if (!allTasks || allTasks.length === 0) return [];
     const columnsMap: { [key: string]: ScheduleColumn } = {};
-
-    // Sort tasks robustly by date (if parseable) then day name, then time
     const sortedTasks = [...allTasks].sort((a, b) => {
       const dateA = new Date(a.day);
       const dateB = new Date(b.day);
@@ -77,13 +73,9 @@ export default function Dashboard() {
       if (isValidDateA && isValidDateB) {
         if (dateA.getTime() !== dateB.getTime())
           return dateA.getTime() - dateB.getTime();
-      } else if (isValidDateA) {
-        return -1;
-      } else if (isValidDateB) {
-        return 1;
-      } else if (dayNumA !== dayNumB) {
-        return dayNumA - dayNumB;
-      }
+      } else if (isValidDateA) return -1;
+      else if (isValidDateB) return 1;
+      else if (dayNumA !== dayNumB) return dayNumA - dayNumB;
       return (a.time || "").localeCompare(b.time || "");
     });
 
@@ -96,7 +88,6 @@ export default function Dashboard() {
       columnsMap[columnId].tasks.push(task);
     });
 
-    // Order columns based on the first task's appearance
     const orderedColumns = Object.values(columnsMap).sort((colA, colB) => {
       const firstTaskAIndex = sortedTasks.findIndex(
         (t) => (t.day || "Unspecified Day") === colA.title
@@ -109,12 +100,36 @@ export default function Dashboard() {
         (firstTaskBIndex === -1 ? Infinity : firstTaskBIndex)
       );
     });
-    return orderedColumns; // Return the calculated columns
-  }, [allTasks, dayOrder]); // Dependencies for useMemo
+    return orderedColumns;
+  }, [allTasks, dayOrder]);
 
-  // --- Fetch schedule ---
+  // Effect to auto-hide schedule notes
+  useEffect(() => {
+    // Clear existing timer if notes change before timeout
+    if (notesTimerRef.current) {
+      clearTimeout(notesTimerRef.current);
+      notesTimerRef.current = null;
+    }
+
+    if (scheduleNotes) {
+      notesTimerRef.current = setTimeout(() => {
+        setScheduleNotes(null);
+        notesTimerRef.current = null; // Clear ref after timeout
+      }, 5000); // 5 seconds
+    }
+
+    // Cleanup function to clear timer on unmount
+    return () => {
+      if (notesTimerRef.current) {
+        clearTimeout(notesTimerRef.current);
+      }
+    };
+  }, [scheduleNotes]); // Re-run only when scheduleNotes changes
+
+  // Fetch schedule
   useEffect(() => {
     const fetchSchedule = async () => {
+      // ... (fetch logic remains the same) ...
       if (hasFetchedRef.current || !user) return;
       hasFetchedRef.current = true;
       setIsLoadingSchedule(true);
@@ -132,9 +147,9 @@ export default function Dashboard() {
           throw new Error(errorData.message || "Failed to load schedule");
         }
         const result: ScheduleApiResponse = await response.json();
-        setAllTasks(result.tasks || []); // Update allTasks state
-        setScheduleNotes(result.notes || null);
-        // No need to call processTasksIntoColumns or setScheduleColumns here anymore
+        setAllTasks(result.tasks || []);
+        // Don't set notes here, let generate handle temporary display
+        // setScheduleNotes(result.notes || null);
       } catch (err: any) {
         setError("Could not load your saved schedule. " + err.message);
         setAllTasks([]);
@@ -148,6 +163,7 @@ export default function Dashboard() {
       if (user) {
         fetchSchedule();
       } else {
+        // Reset state if user logs out
         hasFetchedRef.current = false;
         setAllTasks([]);
         setScheduleNotes(null);
@@ -156,15 +172,17 @@ export default function Dashboard() {
         setPendingTaskActions({});
         setIsEditModalOpen(false);
         setEditingTask(null);
+        setFormKey(0); // Reset form key on logout too
       }
     }
-  }, [user, userLoading]); // Removed processTasksIntoColumns from dependency array
+  }, [user, userLoading]);
 
-  // --- Handler for generating a schedule ---
+  // Handler for generating a schedule
   const handleGenerateSchedule = async (data: ScheduleInputData) => {
     if (!user) return;
     setIsGenerating(true);
     setError(null);
+    setScheduleNotes(null); // Clear previous notes immediately
     setPendingTaskActions({});
 
     try {
@@ -182,9 +200,9 @@ export default function Dashboard() {
       }
 
       const result: ScheduleApiResponse = await response.json();
-      setAllTasks(result.tasks || []); // Update allTasks state
-      setScheduleNotes(result.notes || null);
-      // scheduleColumns will update automatically via useMemo
+      setAllTasks(result.tasks || []);
+      setScheduleNotes(result.notes || null); // Set notes for temporary display
+      setFormKey((prevKey) => prevKey + 1); // Increment key to reset form
     } catch (err: any) {
       setError("Could not generate schedule: " + err.message);
     } finally {
@@ -197,6 +215,7 @@ export default function Dashboard() {
     taskId: string,
     currentStatus: boolean
   ) => {
+    // ... (logic remains the same) ...
     if (!user) return;
     setError(null);
     setPendingTaskActions((prev) => ({ ...prev, [taskId]: "toggle" }));
@@ -218,7 +237,6 @@ export default function Dashboard() {
         );
       }
 
-      // Update allTasks state - UI will update via useMemo
       setAllTasks((prevTasks) =>
         prevTasks.map((task) =>
           task.taskId === taskId ? { ...task, isCompleted: newStatus } : task
@@ -237,6 +255,7 @@ export default function Dashboard() {
 
   // --- Handler for deleting a task ---
   const handleDeleteTask = async (taskId: string) => {
+    // ... (logic remains the same) ...
     if (!user) return;
     const taskToDelete = allTasks.find((t) => t.taskId === taskId);
     if (!taskToDelete) return;
@@ -265,7 +284,6 @@ export default function Dashboard() {
         throw new Error(errorData.message || "Server error deleting task.");
       }
 
-      // Update allTasks state - UI will update via useMemo
       setAllTasks((prevTasks) =>
         prevTasks.filter((task) => task.taskId !== taskId)
       );
@@ -292,6 +310,7 @@ export default function Dashboard() {
   };
 
   const handleSaveTask = async (taskId: string, updates: Partial<Task>) => {
+    // ... (logic remains the same) ...
     if (!user || !editingTask) return;
     setError(null);
     setPendingTaskActions((prev) => ({ ...prev, [taskId]: "edit" }));
@@ -312,16 +331,15 @@ export default function Dashboard() {
         );
       }
 
-      // Update allTasks state - UI will update via useMemo
       setAllTasks((prevTasks) =>
         prevTasks.map((task) =>
           task.taskId === taskId ? { ...task, ...updates } : task
         )
       );
-      handleCloseEditModal(); // Close modal on success
+      handleCloseEditModal();
     } catch (err: any) {
       console.error("Error saving task:", err);
-      throw err; // Re-throw for modal to display
+      throw err; // Re-throw for modal
     } finally {
       setPendingTaskActions((prev) => {
         const newState = { ...prev };
@@ -331,7 +349,7 @@ export default function Dashboard() {
     }
   };
 
-  // --- REMOVED useEffect that called processTasksIntoColumns ---
+  // --- Render Logic ---
 
   if (userLoading) {
     return (
@@ -399,10 +417,10 @@ export default function Dashboard() {
         </div>
       )}
 
-      {/* Optional: Display Overall Schedule Notes */}
+      {/* Temp Display Overall Schedule Notes */}
       {scheduleNotes && (
         <div
-          className="mb-4 p-3 bg-yellow-100 border border-yellow-400 text-yellow-800 rounded text-sm"
+          className="mb-4 p-3 bg-yellow-100 border border-yellow-400 text-yellow-800 rounded text-sm transition-opacity duration-500"
           role="alert"
         >
           <strong>Notes from AI:</strong> {scheduleNotes}
@@ -418,6 +436,7 @@ export default function Dashboard() {
           </h2>
           {user ? (
             <TaskInputForm
+              key={formKey} // Add key here to force reset
               onSubmit={handleGenerateSchedule}
               isGenerating={isGenerating}
             />
@@ -449,7 +468,6 @@ export default function Dashboard() {
           )}
 
           {/* Schedule Display or Placeholder */}
-          {/* Use the memoized scheduleColumns directly */}
           {!isLoadingSchedule &&
             !isGenerating &&
             scheduleColumns.length > 0 && (
@@ -459,6 +477,7 @@ export default function Dashboard() {
                     key={column.id}
                     className="bg-gray-100 rounded-lg p-3 min-w-[280px] max-w-[320px] flex-shrink-0 self-start"
                   >
+                    {/* Column Title might include date - adjust if needed */}
                     <h3 className="font-semibold text-gray-700 mb-3 px-1 sticky top-0 bg-gray-100 py-1 z-10">
                       {column.title}
                     </h3>
