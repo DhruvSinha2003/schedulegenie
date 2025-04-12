@@ -53,7 +53,7 @@ export async function PATCH(req: NextRequest) { // Use PATCH for partial updates
         }
 
         return NextResponse.json({ message: 'Task updated successfully.' }, { status: 200 });
-
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (error: any) {
         console.error('Error in /api/update-task:', error);
         return NextResponse.json({ message: error.message || 'Internal server error.' }, { status: 500 });

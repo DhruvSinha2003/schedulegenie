@@ -1,9 +1,8 @@
 // app/api/generate-schedule/route.ts
 import clientPromise from '@/lib/mongodb';
-import { getSession } from '@auth0/nextjs-auth0';
+import { getSession } from '@auth0/nextjs-auth0/edge';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import crypto from 'crypto';
-import { cookies } from 'next/headers';
 import { NextRequest, NextResponse } from 'next/server';
 
 const GEMINI_API_KEY = process.env.GOOGLE_GEMINI_API_KEY;
@@ -36,8 +35,7 @@ export async function POST(req: NextRequest) {
             return NextResponse.json({ message: 'AI service configuration error.' }, { status: 500 });
         }
 
-        const cookieStore = cookies();
-        const session = await getSession({ req, cookieStore });
+        const session = await getSession();
 
         if (!session || !session.user) {
             return NextResponse.json({ message: 'Unauthorized' }, { status: 401 });
@@ -88,14 +86,16 @@ export async function POST(req: NextRequest) {
         `;
 
         const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' }); // Consider different models if needed
-        const generationConfig = {
-            temperature: 0.5, // Adjust temperature for creativity vs. predictability
-            // topK: 1, topP: 1, // Can adjust these for diversity
-            maxOutputTokens: 4096, // Check model limits
-            responseMimeType: "application/json",
-        };
-
-        const result = await model.generateContent(prompt, generationConfig);
+        
+        // Fixed generationConfig to match SingleRequestOptions
+        const result = await model.generateContent({
+            contents: [{ role: 'user', parts: [{ text: prompt }] }],
+            generationConfig: {
+                temperature: 0.5,
+                maxOutputTokens: 4096,
+            }
+        });
+        
         const response = result.response;
         const rawJsonText = response.text();
 
@@ -111,12 +111,14 @@ export async function POST(req: NextRequest) {
                 console.error("generate-schedule: Gemini response validation failed: 'tasks' array missing or invalid.", cleanedJsonText);
                 throw new Error("AI returned an unexpected schedule format.");
             }
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         } catch (parseError: any) {
             console.error('generate-schedule: Error parsing Gemini JSON:', parseError, "\nRaw text:", rawJsonText);
             return NextResponse.json({ message: 'Failed to parse AI schedule response. The AI might have returned an invalid format.' }, { status: 500 });
         }
 
         // Process tasks (Add ID, completion status)
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const newTasks = parsedResponse.tasks.map((task: any) => ({
             taskId: crypto.randomUUID(),
             content: task.content || 'Unnamed Task', // Use AI-generated content
@@ -148,7 +150,7 @@ export async function POST(req: NextRequest) {
             const allTasks = [...existingTasks, ...newTasks];
 
             // Update the schedule document with the combined list
-            const updateResult = await schedulesCollection.updateOne(
+            await schedulesCollection.updateOne(
                 { userId: userId },
                 {
                     $set: {
@@ -164,6 +166,7 @@ export async function POST(req: NextRequest) {
                 { upsert: true }
             );
 
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         } catch (dbError: any) {
             console.error("generate-schedule: Error saving/updating schedule to MongoDB:", dbError);
             // Return error but maybe still let user see generated tasks if AI call succeeded?
@@ -175,6 +178,7 @@ export async function POST(req: NextRequest) {
         const finalSchedule = await clientPromise.then(client => client.db(DB_NAME).collection(SCHEDULES_COLLECTION).findOne({ userId: userId }));
         return NextResponse.json({ tasks: finalSchedule?.tasks || [], notes: finalSchedule?.notes || null }, { status: 200 });
 
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (error: any) {
         console.error('Error in /api/generate-schedule:', error);
         const message = error instanceof Error ? error.message : 'An internal server error occurred.';

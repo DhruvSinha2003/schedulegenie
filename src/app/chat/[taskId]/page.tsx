@@ -32,7 +32,7 @@ interface RateLimitStatus {
   remaining: number;
   limit: number;
   windowMinutes: number;
-  resetTime?: string;
+  resetTime?: string | null;
 }
 
 export default function ChatPage() {
@@ -103,6 +103,7 @@ export default function ChatPage() {
             `Regarding my task "${data.task.content}" scheduled for ${data.task.day} at ${data.task.time}: `
           );
         }
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
       } catch (err: any) {
         setError(`Error loading task: ${err.message}`);
         setTask(null);
@@ -119,9 +120,7 @@ export default function ChatPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [taskId, user, userLoading]);
 
-  // Fetch Rate Limit Status Function
   const fetchRateLimitStatus = useCallback(async () => {
-    // ... (logic remains the same) ...
     if (!user) return;
     try {
       const response = await fetch("/api/chat-status");
@@ -135,7 +134,7 @@ export default function ChatPage() {
       } else {
         setRateLimit(null);
       }
-    } catch (err) {
+    } catch {
       setRateLimit(null);
     }
   }, [user, calculateResetTime, error]);
@@ -219,6 +218,7 @@ export default function ChatPage() {
         setChatHistory((prev) => [...prev, aiResponseMessage]);
         fetchRateLimitStatus();
       }
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (err: any) {
       setError(`Error communicating with AI: ${err.message}`);
       setChatHistory((prev) => prev.slice(0, -1));
@@ -249,12 +249,12 @@ export default function ChatPage() {
             Authentication Error
           </h2>
           <p className="text-gray-700 mb-6">{userError.message}</p>
-          <a
+          <Link
             href="/api/auth/login"
             className="inline-block bg-indigo-600 text-white px-5 py-2 rounded-md hover:bg-indigo-700 transition-colors"
           >
             Log In Again
-          </a>
+          </Link>
         </div>
       </div>
     );
@@ -268,12 +268,12 @@ export default function ChatPage() {
           <p className="text-gray-700 mb-6">
             Please log in to access the AI chat assistant.
           </p>
-          <a
+          <Link
             href="/api/auth/login"
             className="inline-block bg-indigo-600 text-white px-5 py-2 rounded-md hover:bg-indigo-700 transition-colors"
           >
             Log In
-          </a>
+          </Link>
         </div>
       </div>
     );
@@ -397,8 +397,9 @@ export default function ChatPage() {
                 Start the conversation
               </h3>
               <p>
-                Ask the AI assistant anything about your task: "{task?.content}
-                ".
+                Ask the AI assistant anything about your task: &quot;
+                {task?.content}
+                &quot;.
               </p>
             </div>
           </div>

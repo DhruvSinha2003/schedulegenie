@@ -1,17 +1,16 @@
 // app/api/get-schedule/route.ts
 import clientPromise from '@/lib/mongodb';
-import { getSession } from '@auth0/nextjs-auth0';
-import { cookies } from 'next/headers'; // Import cookies
-import { NextRequest, NextResponse } from 'next/server';
+import { getSession } from '@auth0/nextjs-auth0/edge'; // Updated import
+import { NextResponse } from 'next/server';
 
 const DB_NAME = process.env.MONGODB_DB_NAME || "StudioGenieDB";
 const SCHEDULES_COLLECTION = "schedules";
 const USERS_COLLECTION = "users";
 
-export async function GET(req: NextRequest) {
+export async function GET() {
     try {
-        const cookieStore = cookies(); // Get cookies
-        const session = await getSession({ cookieStore }); // Pass to getSession
+        // Get the session using the edge-compatible method
+        const session = await getSession();
 
         if (!session || !session.user) {
             return NextResponse.json({ message: 'Unauthorized' }, { status: 401 });
@@ -62,7 +61,7 @@ export async function GET(req: NextRequest) {
             },
             { status: 200 }
         );
-
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (error: any) {
         console.error('Error in /api/get-schedule:', error);
         return NextResponse.json({ message: error.message || 'Internal server error while fetching schedule.' }, { status: 500 });

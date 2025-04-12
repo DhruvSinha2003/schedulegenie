@@ -2,6 +2,7 @@
 
 import { useUser } from "@auth0/nextjs-auth0/client";
 import { Clock, MessageSquare, Mic, Trello } from "lucide-react";
+import Image from "next/image";
 import Link from "next/link";
 
 export default function Home() {
@@ -37,12 +38,14 @@ export default function Home() {
                 <div className="flex items-center space-x-4">
                   <div className="flex items-center space-x-2">
                     {user.picture && (
-                      <img
+                      <Image
                         src={user.picture}
                         alt={user.name || "User"}
                         width={32}
                         height={32}
                         className="rounded-full"
+                        priority
+                        unoptimized
                       />
                     )}
                     <span className="text-gray-700">
