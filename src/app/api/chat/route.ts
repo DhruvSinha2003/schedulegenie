@@ -2,8 +2,8 @@
 import clientPromise from '@/lib/mongodb';
 import { getSession } from '@auth0/nextjs-auth0';
 import { GoogleGenerativeAI } from '@google/generative-ai';
-import { NextRequest, NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
+import { NextRequest, NextResponse } from 'next/server';
 
 const GEMINI_API_KEY = process.env.GOOGLE_GEMINI_API_KEY;
 if (!GEMINI_API_KEY) throw new Error("Missing GOOGLE_GEMINI_API_KEY");
@@ -48,7 +48,7 @@ export async function POST(req: NextRequest) {
             return NextResponse.json({
                 message: `Rate limit exceeded. Please wait. Limit is ${RATE_LIMIT_COUNT} requests per ${RATE_LIMIT_WINDOW_MINUTES} minutes.`,
                 limitExceeded: true
-            }, { status: 429 }); // 429 Too Many Requests
+            }, { status: 429 }); 
         }
 
         // Add current timestamp and update DB *before* making AI call
@@ -63,7 +63,6 @@ export async function POST(req: NextRequest) {
         const body = await req.json();
         // Expecting history: ChatMessage[] and potentially taskId for context
         const history: ChatMessage[] = body.history || [];
-        const taskContext = body.taskContext || "User is asking for help with a task."; // Optional task context
 
         if (!history || history.length === 0 || history[history.length - 1].role !== 'user') {
              return NextResponse.json({ message: 'Invalid chat history provided.' }, { status: 400 });
@@ -71,7 +70,7 @@ export async function POST(req: NextRequest) {
 
         // Construct prompt/history for Gemini Chat
         // The SDK's chat method usually handles history formatting
-        const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" }); // Use appropriate model
+        const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
         const chat = model.startChat({
              history: history.slice(0, -1), // Send all but the last user message as history
              // generationConfig: { maxOutputTokens: 500, temperature: 0.7 }, // Optional config
@@ -79,19 +78,16 @@ export async function POST(req: NextRequest) {
 
         const lastUserMessage = history[history.length - 1].parts[0].text;
 
-        // Add task context if needed (could prepend to lastUserMessage or add as system message if supported)
-        const messageToSend = `Context: ${taskContext}\n\nUser query: ${lastUserMessage}`;
+        const messageToSend = `User query: ${lastUserMessage}`;
 
         const result = await chat.sendMessage(messageToSend);
         const response = result.response;
         const aiResponseText = response.text();
 
-        // Return AI response
         return NextResponse.json({ response: aiResponseText }, { status: 200 });
 
     } catch (error: any) {
         console.error('Error in /api/chat:', error);
-        // Provide more specific error if possible (e.g., Gemini API errors)
         return NextResponse.json({ message: error.message || 'Internal server error during chat.' }, { status: 500 });
     }
 }
