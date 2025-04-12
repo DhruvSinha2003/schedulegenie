@@ -9,7 +9,7 @@ interface EditTaskModalProps {
   task: Task | null;
   isOpen: boolean;
   onClose: () => void;
-  onSave: (taskId: string, updates: Partial<Task>) => Promise<void>; // Made promise to handle loading
+  onSave: (taskId: string, updates: Partial<Task>) => Promise<void>;
 }
 
 export default function EditTaskModal({
@@ -32,8 +32,8 @@ export default function EditTaskModal({
       setDay(task.day);
       setTime(task.time);
       setNotes(task.notes || "");
-      setError(null); // Clear error when modal opens with new task
-      setIsSaving(false); // Reset saving state
+      setError(null);
+      setIsSaving(false);
     }
   }, [task]);
 
@@ -46,22 +46,19 @@ export default function EditTaskModal({
     if (content !== task.content) updates.content = content;
     if (day !== task.day) updates.day = day;
     if (time !== task.time) updates.time = time;
-    // Only update notes if it changed from the original (treat empty string as null for consistency maybe?)
     const currentNotes = notes.trim() || null;
     if (currentNotes !== task.notes) updates.notes = currentNotes;
 
-    // Only call save if there are actual changes
     if (Object.keys(updates).length > 0) {
       try {
         await onSave(task.taskId, updates);
-        onClose(); // Close modal on successful save
+        onClose();
       } catch (err: any) {
         setError(err.message || "Failed to save task.");
       } finally {
         setIsSaving(false);
       }
     } else {
-      // No changes, just close
       onClose();
       setIsSaving(false);
     }
@@ -72,16 +69,22 @@ export default function EditTaskModal({
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 backdrop-blur-sm">
-      <div className="bg-white rounded-lg shadow-xl p-6 w-full max-w-lg mx-4">
-        <h2 className="text-xl font-semibold mb-4 text-gray-800">Edit Task</h2>
+    // --- MODIFIED THIS DIV ---
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900/30 backdrop-blur-sm p-4">
+      {/* Removed: bg-black bg-opacity-50 */}
+      {/* Added: bg-gray-900/30 (or bg-black/20 etc.) backdrop-blur-sm */}
+      {/* Added: p-4 for some padding around the modal itself on small screens */}
+      {/* --- End Modification --- */}
 
+      <div className="bg-white rounded-lg shadow-xl p-6 w-full max-w-lg mx-auto">
+        {" "}
+        {/* Added mx-auto */}
+        <h2 className="text-xl font-semibold mb-4 text-gray-800">Edit Task</h2>
         {error && (
           <div className="mb-4 p-3 bg-red-100 border border-red-400 text-red-700 rounded text-sm">
             {error}
           </div>
         )}
-
         <form
           onSubmit={(e) => {
             e.preventDefault();
