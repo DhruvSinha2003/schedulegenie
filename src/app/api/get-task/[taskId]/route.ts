@@ -1,6 +1,6 @@
 import clientPromise from '@/lib/mongodb';
 import { getSession } from '@auth0/nextjs-auth0/edge';
-import { NextRequest, NextResponse } from 'next/server';
+import { NextResponse } from 'next/server';
 
 const DB_NAME = process.env.MONGODB_DB_NAME || "StudioGenieDB";
 const SCHEDULES_COLLECTION = "schedules";
@@ -9,7 +9,7 @@ interface Context {
     params: { taskId?: string };
 }
 
-export async function GET(req: NextRequest, context: Context) {
+export async function GET( context: Context) {
     try {
         // Get the session using the edge-compatible method
         const session = await getSession();
