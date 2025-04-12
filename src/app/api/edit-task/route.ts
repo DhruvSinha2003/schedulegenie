@@ -1,7 +1,6 @@
 // app/api/edit-task/route.ts
 import clientPromise from '@/lib/mongodb';
-import { getSession } from '@auth0/nextjs-auth0';
-import { cookies } from 'next/headers';
+import { getSession } from '@auth0/nextjs-auth0/edge';
 import { NextRequest, NextResponse } from 'next/server';
 
 const DB_NAME = process.env.MONGODB_DB_NAME || "StudioGenieDB";
@@ -11,10 +10,9 @@ const SCHEDULES_COLLECTION = "schedules";
 const ALLOWED_UPDATE_FIELDS = ['content', 'day', 'time', 'notes'];
 
 export async function PATCH(req: NextRequest) {
-    let session;
     try {
-        const cookieStore = cookies();
-        session = await getSession({ cookieStore });
+        const session = await getSession();
+        
         if (!session || !session.user) {
             return NextResponse.json({ message: 'Unauthorized' }, { status: 401 });
         }
@@ -30,32 +28,32 @@ export async function PATCH(req: NextRequest) {
             return NextResponse.json({ message: 'Missing or invalid updates object.' }, { status: 400 });
         }
         if (Object.keys(updates).length === 0) {
-             return NextResponse.json({ message: 'No update fields provided.' }, { status: 400 });
+            return NextResponse.json({ message: 'No update fields provided.' }, { status: 400 });
         }
 
-        // --- Build the $set object safely ---
+        // Build the $set object safely
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const updateFields: Record<string, any> = {};
         let hasValidUpdate = false;
         for (const key of Object.keys(updates)) {
             if (ALLOWED_UPDATE_FIELDS.includes(key)) {
-                 // Basic validation (could be more specific per field)
-                 if (key === 'notes' && updates[key] !== null && typeof updates[key] !== 'string') {
-                     continue; // skip invalid notes type
-                 }
-                 if (key !== 'notes' && (typeof updates[key] !== 'string' || updates[key].trim() === '')) {
-                     // Require non-empty strings for content, day, time
-                     continue;
-                 }
-                 // MongoDB field path using arrayFilters element 'elem'
-                 updateFields[`tasks.$[elem].${key}`] = updates[key];
-                 hasValidUpdate = true;
+                // Basic validation
+                if (key === 'notes' && updates[key] !== null && typeof updates[key] !== 'string') {
+                    continue; // skip invalid notes type
+                }
+                if (key !== 'notes' && (typeof updates[key] !== 'string' || updates[key].trim() === '')) {
+                    // Require non-empty strings for content, day, time
+                    continue;
+                }
+                // MongoDB field path using arrayFilters element 'elem'
+                updateFields[`tasks.$[elem].${key}`] = updates[key];
+                hasValidUpdate = true;
             }
         }
 
         if (!hasValidUpdate) {
             return NextResponse.json({ message: 'No valid update fields provided.' }, { status: 400 });
         }
-        // --- End Build $set object ---
 
         const client = await clientPromise;
         const db = client.db(DB_NAME);
@@ -82,6 +80,7 @@ export async function PATCH(req: NextRequest) {
 
         return NextResponse.json({ message: 'Task updated successfully.' }, { status: 200 });
 
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (error: any) {
         console.error('Error in /api/edit-task:', error);
         // Avoid leaking detailed internal errors in production

@@ -1,26 +1,23 @@
 // app/api/export-schedule/route.ts
+import { formatForICS, parseTaskDateTime } from '@/lib/dateUtils';
 import clientPromise from '@/lib/mongodb';
-import { getSession } from '@auth0/nextjs-auth0';
-import { cookies } from 'next/headers';
-import { NextRequest, NextResponse } from 'next/server';
-import * as ics from 'ics'; // Import ics library
-import { parseTaskDateTime, formatForICS } from '@/lib/dateUtils'; // Import our utils
 import { Task } from '@/types/task';
+import { getSession } from '@auth0/nextjs-auth0/edge';
+import * as ics from 'ics';
+import { NextResponse } from 'next/server';
 
 const DB_NAME = process.env.MONGODB_DB_NAME || "StudioGenieDB";
 const SCHEDULES_COLLECTION = "schedules";
 
-export async function GET(req: NextRequest) {
-    let session;
+export async function GET() {
     try {
-        const cookieStore = cookies();
-        session = await getSession({ cookieStore });
+        const session = await getSession();
+        
         if (!session || !session.user) {
             return NextResponse.json({ message: 'Unauthorized' }, { status: 401 });
         }
         const userId = session.user.sub;
 
-        // Fetch the user's schedule
         const client = await clientPromise;
         const db = client.db(DB_NAME);
         const schedulesCollection = db.collection(SCHEDULES_COLLECTION);
@@ -31,7 +28,7 @@ export async function GET(req: NextRequest) {
         }
 
         const events: ics.EventAttributes[] = [];
-        const referenceDate = new Date(); // Use server's current date for relative terms
+        const referenceDate = new Date();
 
         userSchedule.tasks.forEach((task: Task) => {
             const { start, end } = parseTaskDateTime(task, referenceDate);
@@ -43,38 +40,34 @@ export async function GET(req: NextRequest) {
                 if (startArr && endArr) {
                     events.push({
                         title: task.content,
-                        start: startArr,
-                        end: endArr, // Or use duration if preferred/calculated
-                        description: task.notes || undefined, // Optional description
-                        uid: task.taskId, // Use taskId for unique ID
-                        // Optional: Add location, organizer etc. if available/needed
-                        // location: '...',
-                        // organizer: { name: 'ScheduleGenie', email: 'noreply@example.com' },
+                        start: startArr as [number, number, number, number, number],
+                        end: endArr as [number, number, number, number, number],
+                        description: task.notes || undefined,
+                        uid: task.taskId,
                     });
                 } else {
                     console.warn(`Skipping task for ICS export due to formatting issue: ${task.taskId}`);
                 }
             } else {
-                 console.warn(`Skipping task for ICS export due to parsing issue: ${task.taskId} (Day: ${task.day}, Time: ${task.time})`);
+                console.warn(`Skipping task for ICS export due to parsing issue: ${task.taskId} (Day: ${task.day}, Time: ${task.time})`);
             }
         });
 
         if (events.length === 0) {
-             return NextResponse.json({ message: 'Could not parse any tasks into valid calendar events.' }, { status: 400 });
+            return NextResponse.json({ message: 'Could not parse any tasks into valid calendar events.' }, { status: 400 });
         }
 
         const { error, value } = ics.createEvents(events);
 
         if (error) {
             console.error("Error creating ICS file:", error);
-            throw error; // Let the main error handler catch it
+            throw error;
         }
 
         if (!value) {
-             return NextResponse.json({ message: 'Failed to generate ICS data.' }, { status: 500 });
+            return NextResponse.json({ message: 'Failed to generate ICS data.' }, { status: 500 });
         }
 
-        // Return the ICS file content
         return new NextResponse(value, {
             status: 200,
             headers: {
@@ -83,6 +76,7 @@ export async function GET(req: NextRequest) {
             },
         });
 
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (error: any) {
         console.error('Error in /api/export-schedule:', error);
         return NextResponse.json({ message: error.message || 'Internal server error generating schedule export.' }, { status: 500 });

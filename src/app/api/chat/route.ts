@@ -1,8 +1,7 @@
 // app/api/chat/route.ts
 import clientPromise from '@/lib/mongodb';
-import { getSession } from '@auth0/nextjs-auth0';
+import { getSession } from '@auth0/nextjs-auth0/edge';
 import { GoogleGenerativeAI } from '@google/generative-ai';
-import { cookies } from 'next/headers';
 import { NextRequest, NextResponse } from 'next/server';
 
 const GEMINI_API_KEY = process.env.GOOGLE_GEMINI_API_KEY;
@@ -22,9 +21,7 @@ interface ChatMessage {
 
 export async function POST(req: NextRequest) {
     try {
-        // Important: await cookies() before using getSession()
-        const cookieStore = cookies();
-        const session = await getSession({ req, cookieStore });
+        const session = await getSession();
         
         if (!session || !session.user) {
             return NextResponse.json({ message: 'Unauthorized' }, { status: 401 });
@@ -41,7 +38,8 @@ export async function POST(req: NextRequest) {
         const windowStart = Date.now() - RATE_LIMIT_WINDOW_MINUTES * 60 * 1000;
 
         // Filter out old timestamps
-        const recentTimestamps = currentTimestamps.filter((ts: Date) => new Date(ts).getTime() >= windowStart);
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const recentTimestamps = currentTimestamps.filter((ts: any) => new Date(ts).getTime() >= windowStart);
 
         if (recentTimestamps.length >= RATE_LIMIT_COUNT) {
             console.log(`Rate limit exceeded for user: ${userId}`);
@@ -86,6 +84,7 @@ export async function POST(req: NextRequest) {
 
         return NextResponse.json({ response: aiResponseText }, { status: 200 });
 
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (error: any) {
         console.error('Error in /api/chat:', error);
         return NextResponse.json({ message: error.message || 'Internal server error during chat.' }, { status: 500 });

@@ -1,19 +1,16 @@
 // app/api/chat-status/route.ts
 import clientPromise from '@/lib/mongodb';
-import { getSession } from '@auth0/nextjs-auth0';
-import { cookies } from 'next/headers';
-import { NextRequest, NextResponse } from 'next/server';
+import { getSession } from '@auth0/nextjs-auth0/edge';
+import { NextResponse } from 'next/server';
 
 const DB_NAME = process.env.MONGODB_DB_NAME || "StudioGenieDB";
 const USERS_COLLECTION = "users";
 const RATE_LIMIT_COUNT = 5;
 const RATE_LIMIT_WINDOW_MINUTES = 10;
 
-export async function GET(req: NextRequest) {
+export async function GET() {
     try {
-        // Important: await the cookies() function before using it
-        const cookieStore = await cookies();
-        const session = await getSession({ req, cookieStore });
+        const session = await getSession();
         
         if (!session || !session.user) {
             return NextResponse.json({ message: 'Unauthorized' }, { status: 401 });
@@ -29,7 +26,8 @@ export async function GET(req: NextRequest) {
         const timestamps = user?.chatRequestTimestamps || [];
         const windowStart = Date.now() - RATE_LIMIT_WINDOW_MINUTES * 60 * 1000;
 
-        const recentRequests = timestamps.filter((ts: Date) => new Date(ts).getTime() >= windowStart);
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const recentRequests = timestamps.filter((ts: any) => new Date(ts).getTime() >= windowStart);
         const remaining = Math.max(0, RATE_LIMIT_COUNT - recentRequests.length);
 
         return NextResponse.json({
@@ -38,6 +36,7 @@ export async function GET(req: NextRequest) {
             windowMinutes: RATE_LIMIT_WINDOW_MINUTES
         }, { status: 200 });
 
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (error: any) {
         console.error('Error in /api/chat-status:', error);
         return NextResponse.json({ message: error.message || 'Internal server error.' }, { status: 500 });
