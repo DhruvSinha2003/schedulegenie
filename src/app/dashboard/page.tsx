@@ -87,11 +87,9 @@ export default function Dashboard() {
       try {
         const response = await fetch("/api/get-schedule");
         if (!response.ok) {
-          const errorData = await response
-            .json()
-            .catch(() => ({
-              message: `HTTP error! status: ${response.status}`,
-            }));
+          const errorData = await response.json().catch(() => ({
+            message: `HTTP error! status: ${response.status}`,
+          }));
           throw new Error(errorData.message);
         }
         const result: ScheduleApiResponse = await response.json();
@@ -229,23 +227,6 @@ export default function Dashboard() {
       // Revert UI on error
       setAllTasks(originalTasks);
       processTasksIntoColumns(originalTasks); // Revert columns
-    }
-  };
-
-  // --- Utility to format timestamp ---
-  const formatTimestamp = (isoString: string | null): string => {
-    if (!isoString) return "";
-    try {
-      // Using locale defaults for better user experience
-      return new Date(isoString).toLocaleString(undefined, {
-        hour: "numeric",
-        minute: "2-digit",
-        // Optional: add more details like day/month if needed
-        // day: 'numeric',
-        // month: 'short',
-      });
-    } catch {
-      return "Invalid Date";
     }
   };
 
@@ -431,11 +412,7 @@ export default function Dashboard() {
                             <p className="text-xs text-gray-500 mt-1">
                               {task.time}
                             </p>
-                            {task.timestamp && (
-                              <p className="text-xs text-indigo-500 mt-1">
-                                Starts: {formatTimestamp(task.timestamp)}
-                              </p>
-                            )}
+
                             {task.notes && (
                               <p className="text-xs italic text-gray-400 mt-1 break-words">
                                 Notes: {task.notes}

@@ -20,7 +20,6 @@ const jsonOutputSchema = `{
       "content": "string (the original task description)",
       "day": "string (e.g., Monday, Tuesday, Specific Date YYYY-MM-DD)",
       "time": "string (assigned time block, e.g., 9:00 AM - 10:30 AM)",
-      "timestamp": "string | null (ISO 8601 format UTC timestamp for the start of the task, e.g., 2024-07-30T09:00:00Z, or null if not applicable)",
       "notes": "string (optional: any notes from the AI, like duration assumptions)"
     }
   ],
@@ -45,16 +44,9 @@ export async function POST(req: NextRequest) {
         if (!taskInputString || typeof taskInputString !== 'string' || taskInputString.trim() === "") {
              return NextResponse.json({ message: 'Tasks input cannot be empty.' }, { status: 400 });
          }
-        // ... other input validations (availability, flexibility) ...
 
-        // Get current time for Gemini context
-        const now = new Date();
-        const currentTimeISO = now.toISOString();
-
-        // Construct Prompt with timestamp request
         const prompt = `
           You are StudioGenie, an AI scheduling assistant. Create a time-blocked schedule based on user input.
-          Current UTC time is: ${currentTimeISO}. Use this as the reference point for scheduling "today", "tomorrow", etc., unless specific dates are given in availability.
 
           User Input:
           - Tasks (one per line):
