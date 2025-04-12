@@ -1,12 +1,15 @@
 // app/dashboard/page.tsx
 "use client";
 
-import TaskInputForm from "@/components/TaskInputForm"; // Ensure this path is correct
+import TaskInputForm from "@/components/TaskInputForm";
 import { useUser } from "@auth0/nextjs-auth0/client";
-import { useCallback, useEffect, useState } from "react";
+import Image from "next/image";
+import Link from "next/link";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   FaRegCheckSquare,
   FaRegSquare,
+  FaRobot,
   FaSpinner,
   FaTrashAlt,
 } from "react-icons/fa";
@@ -17,23 +20,19 @@ interface Task {
   content: string;
   day: string;
   time: string;
-  timestamp: string | null;
   isCompleted: boolean;
   notes: string | null;
 }
-
 interface ScheduleColumn {
   id: string;
   title: string;
   tasks: Task[];
 }
-
 interface ScheduleInputData {
   tasks: string;
   availability: string;
   flexibility: "rigid" | "flexible";
 }
-
 interface ScheduleApiResponse {
   tasks: Task[];
   notes?: string | null;
@@ -45,59 +44,98 @@ export default function Dashboard() {
   const [allTasks, setAllTasks] = useState<Task[]>([]);
   const [scheduleColumns, setScheduleColumns] = useState<ScheduleColumn[]>([]);
   const [isGenerating, setIsGenerating] = useState(false);
-  const [isLoadingSchedule, setIsLoadingSchedule] = useState(true);
+  const [isLoadingSchedule, setIsLoadingSchedule] = useState(true); // Start true for initial load
   const [error, setError] = useState<string | null>(null);
   const [scheduleNotes, setScheduleNotes] = useState<string | null>(null);
 
-  // --- useCallback to process tasks into columns ---
-  const processTasksIntoColumns = useCallback((tasks: Task[]) => {
-    if (!tasks || tasks.length === 0) {
-      setScheduleColumns([]);
-      return;
-    }
+  // Flag to prevent multiple fetches
+  const hasFetchedRef = useRef(false);
 
-    const columnsMap: { [key: string]: ScheduleColumn } = {};
-    const sortedTasks = tasks.sort((a, b) => {
-      const timeA = a.timestamp ? new Date(a.timestamp).getTime() : Infinity;
-      const timeB = b.timestamp ? new Date(b.timestamp).getTime() : Infinity;
-      if (timeA === timeB) {
-        return (a.day + a.time).localeCompare(b.day + b.time);
+  // --- Day of Week Mapping ---
+  const dayOrder: { [key: string]: number } = {
+    sunday: 0,
+    monday: 1,
+    tuesday: 2,
+    wednesday: 3,
+    thursday: 4,
+    friday: 5,
+    saturday: 6,
+  };
+
+  // --- Process tasks into columns ---
+  const processTasksIntoColumns = useCallback(
+    (tasks: Task[]) => {
+      if (!tasks || tasks.length === 0) {
+        setScheduleColumns([]);
+        return;
       }
-      return timeA - timeB;
-    });
+      const columnsMap: { [key: string]: ScheduleColumn } = {};
+      const sortedTasks = [...tasks].sort((a, b) => {
+        const dateA = Date.parse(a.day);
+        const dateB = Date.parse(b.day);
+        const dayNumA = dayOrder[a.day?.toLowerCase()] ?? 7;
+        const dayNumB = dayOrder[b.day?.toLowerCase()] ?? 7;
+        if (!isNaN(dateA) && !isNaN(dateB)) {
+          if (dateA !== dateB) return dateA - dateB;
+        } else if (!isNaN(dateA)) return -1;
+        else if (!isNaN(dateB)) return 1;
+        else if (dayNumA !== dayNumB) return dayNumA - dayNumB;
+        return (a.time || "").localeCompare(b.time || "");
+      });
 
-    sortedTasks.forEach((task) => {
-      const day = task.day || "Unspecified Day";
-      const columnId = day.toLowerCase().replace(/\s+/g, "-");
+      sortedTasks.forEach((task) => {
+        const dayTitle = task.day || "Unspecified Day";
+        const columnId = dayTitle.toLowerCase().replace(/[^a-z0-9]/g, "-");
+        if (!columnsMap[columnId]) {
+          columnsMap[columnId] = { id: columnId, title: dayTitle, tasks: [] };
+        }
+        columnsMap[columnId].tasks.push(task);
+      });
 
-      if (!columnsMap[columnId]) {
-        columnsMap[columnId] = { id: columnId, title: day, tasks: [] };
-      }
-      columnsMap[columnId].tasks.push(task);
-    });
-    setScheduleColumns(Object.values(columnsMap));
-  }, []);
+      const orderedColumns = Object.values(columnsMap).sort((colA, colB) => {
+        const firstTaskA = sortedTasks.find(
+          (t) => (t.day || "Unspecified Day") === colA.title
+        );
+        const firstTaskB = sortedTasks.find(
+          (t) => (t.day || "Unspecified Day") === colB.title
+        );
+        const indexA = firstTaskA ? sortedTasks.indexOf(firstTaskA) : Infinity;
+        const indexB = firstTaskB ? sortedTasks.indexOf(firstTaskB) : Infinity;
+        return indexA - indexB;
+      });
+      setScheduleColumns(orderedColumns);
+    },
+    [dayOrder]
+  );
 
-  // --- useEffect to load schedule on mount ---
+  // --- Fetch schedule only once when user is loaded ---
   useEffect(() => {
     const fetchSchedule = async () => {
+      // Skip if already fetched or no user
+      if (hasFetchedRef.current || !user) {
+        return;
+      }
+
+      hasFetchedRef.current = true;
       setIsLoadingSchedule(true);
       setError(null);
-      setScheduleNotes(null);
+
       try {
         const response = await fetch("/api/get-schedule");
+
         if (!response.ok) {
           const errorData = await response.json().catch(() => ({
             message: `HTTP error! status: ${response.status}`,
           }));
           throw new Error(errorData.message);
         }
+
         const result: ScheduleApiResponse = await response.json();
         setAllTasks(result.tasks || []);
         setScheduleNotes(result.notes || null);
         processTasksIntoColumns(result.tasks || []);
       } catch (err: any) {
-        console.error("Dashboard: Error fetching schedule:", err);
+        console.error("Error fetching schedule:", err);
         setError("Could not load your saved schedule. " + err.message);
         setAllTasks([]);
         setScheduleColumns([]);
@@ -106,142 +144,150 @@ export default function Dashboard() {
       }
     };
 
-    if (!userLoading && user) {
-      fetchSchedule();
-    } else if (!userLoading && !user) {
-      setIsLoadingSchedule(false);
-      setAllTasks([]);
-      setScheduleColumns([]);
+    // Only trigger fetch once user load completes
+    if (!userLoading) {
+      if (user) {
+        fetchSchedule();
+      } else {
+        // Reset all states if user is not logged in
+        setAllTasks([]);
+        setScheduleColumns([]);
+        setScheduleNotes(null);
+        setError(null);
+        setIsLoadingSchedule(false);
+      }
     }
   }, [user, userLoading, processTasksIntoColumns]);
 
-  // --- Handler for Generating Schedule ---
+  // --- Handler for generating a schedule ---
   const handleGenerateSchedule = async (data: ScheduleInputData) => {
+    if (!user) return;
+
     setIsGenerating(true);
     setError(null);
-    setScheduleNotes(null);
+
     try {
       const response = await fetch("/api/generate-schedule", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+        },
         body: JSON.stringify(data),
       });
-      const result: ScheduleApiResponse = await response.json();
+
       if (!response.ok) {
-        // Use notes field from response for error message if available
-        throw new Error(
-          result?.notes || `HTTP error! status: ${response.status}`
-        );
+        const errorData = await response.json();
+        throw new Error(errorData.message || "Failed to generate schedule");
       }
+
+      const result: ScheduleApiResponse = await response.json();
       setAllTasks(result.tasks || []);
       setScheduleNotes(result.notes || null);
       processTasksIntoColumns(result.tasks || []);
     } catch (err: any) {
-      console.error("Dashboard: Error generating schedule:", err);
-      setError(
-        err.message || "An unexpected error occurred during generation."
-      );
+      console.error("Error generating schedule:", err);
+      setError("Could not generate schedule: " + err.message);
     } finally {
       setIsGenerating(false);
     }
   };
 
-  // --- Handler for Toggling Task Completion ---
+  // --- Handler for toggling task completion ---
   const handleToggleComplete = async (
     taskId: string,
     currentStatus: boolean
   ) => {
-    const newStatus = !currentStatus;
-    const originalTasks = [...allTasks]; // Optimistic UI backup
+    if (!user) return;
 
-    // Optimistic UI Update
-    const updatedTasks = allTasks.map((task) =>
-      task.taskId === taskId ? { ...task, isCompleted: newStatus } : task
-    );
-    setAllTasks(updatedTasks);
-    processTasksIntoColumns(updatedTasks); // Update columns based on new task state
-
-    // API Call
     try {
-      const response = await fetch("/api/update-task", {
+      // Optimistic update
+      setAllTasks((prevTasks) =>
+        prevTasks.map((task) =>
+          task.taskId === taskId
+            ? { ...task, isCompleted: !currentStatus }
+            : task
+        )
+      );
+
+      // Also update in columns
+      processTasksIntoColumns(
+        allTasks.map((task) =>
+          task.taskId === taskId
+            ? { ...task, isCompleted: !currentStatus }
+            : task
+        )
+      );
+
+      // Server update
+      const response = await fetch(`/api/update-task/${taskId}`, {
         method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ taskId, isCompleted: newStatus }),
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ isCompleted: !currentStatus }),
       });
 
       if (!response.ok) {
-        const errorData = await response
-          .json()
-          .catch(() => ({ message: "Update failed." }));
-        throw new Error(errorData.message);
+        // Revert on failure
+        setAllTasks((prevTasks) =>
+          prevTasks.map((task) =>
+            task.taskId === taskId
+              ? { ...task, isCompleted: currentStatus }
+              : task
+          )
+        );
+        processTasksIntoColumns(
+          allTasks.map((task) =>
+            task.taskId === taskId
+              ? { ...task, isCompleted: currentStatus }
+              : task
+          )
+        );
+        throw new Error("Failed to update task");
       }
-      console.log(`Task ${taskId} status updated to ${newStatus}`);
     } catch (err: any) {
-      console.error("Error updating task status:", err);
-      setError(`Failed to update task: ${err.message}. Reverting.`);
-      // Revert UI on error
-      setAllTasks(originalTasks);
-      processTasksIntoColumns(originalTasks); // Revert columns as well
+      console.error("Error updating task:", err);
+      setError("Could not update task: " + err.message);
     }
   };
 
-  // --- Handler for Deleting Task ---
+  // --- Handler for deleting a task ---
   const handleDeleteTask = async (taskId: string) => {
-    const taskToDelete = allTasks.find((t) => t.taskId === taskId);
-    if (!taskToDelete) return;
+    if (!user) return;
 
-    if (
-      !window.confirm(
-        `Are you sure you want to delete task: "${taskToDelete.content}"?`
-      )
-    ) {
-      return;
-    }
-
-    const originalTasks = [...allTasks]; // Optimistic UI backup
-
-    // Optimistic UI Update
-    const updatedTasks = allTasks.filter((task) => task.taskId !== taskId);
-    setAllTasks(updatedTasks);
-    processTasksIntoColumns(updatedTasks); // Update columns
-
-    // API Call
     try {
-      const response = await fetch(
-        `/api/delete-task?taskId=${encodeURIComponent(taskId)}`,
-        {
-          method: "DELETE",
-        }
-      );
+      // Optimistic update
+      const updatedTasks = allTasks.filter((task) => task.taskId !== taskId);
+      setAllTasks(updatedTasks);
+      processTasksIntoColumns(updatedTasks);
+
+      // Server update
+      const response = await fetch(`/api/delete-task/${taskId}`, {
+        method: "DELETE",
+      });
 
       if (!response.ok) {
-        const errorData = await response
-          .json()
-          .catch(() => ({ message: "Delete failed." }));
-        throw new Error(errorData.message);
+        // Revert on failure
+        setAllTasks(allTasks);
+        processTasksIntoColumns(allTasks);
+        throw new Error("Failed to delete task");
       }
-      console.log(`Task ${taskId} deleted`);
     } catch (err: any) {
       console.error("Error deleting task:", err);
-      setError(`Failed to delete task: ${err.message}. Reverting.`);
-      // Revert UI on error
-      setAllTasks(originalTasks);
-      processTasksIntoColumns(originalTasks); // Revert columns
+      setError("Could not delete task: " + err.message);
     }
   };
 
   // --- Render Logic ---
-  // Handle Auth0 loading state first
   if (userLoading) {
     return (
       <div className="flex justify-center items-center min-h-screen">
-        <FaSpinner className="animate-spin text-4xl text-indigo-500" />
-        <span> Loading user...</span>
+        <FaSpinner className="animate-spin text-3xl text-indigo-500 mr-3" />
+        <span className="text-gray-700">Loading user...</span>
       </div>
     );
   }
 
-  // Handle Auth0 error state
   if (userError) {
     return (
       <div className="p-10 text-center text-red-500">
@@ -250,44 +296,46 @@ export default function Dashboard() {
     );
   }
 
+  // Main component return statement
   return (
     <main className="min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 p-4 sm:p-8">
-      {/* --- Header --- */}
+      {/* Header */}
       <header className="mb-8 flex flex-col sm:flex-row justify-between items-center space-y-4 sm:space-y-0 bg-white p-4 rounded-lg shadow">
         <h1 className="text-2xl sm:text-3xl font-bold text-gray-800">
           Studio<span className="text-indigo-600">Genie</span>
         </h1>
-        {/* Conditionally render user info or login button */}
         {user ? (
           <div className="flex items-center space-x-4">
             {user.picture && (
-              <img
+              <Image
                 src={user.picture}
                 alt={user.name || "User"}
-                className="w-10 h-10 rounded-full border-2 border-indigo-500"
+                width={40}
+                height={40}
+                className="rounded-full border-2 border-indigo-500"
               />
             )}
             <span className="text-gray-700 hidden sm:inline">
               Hi, {user.name || user.nickname}!
             </span>
-            <a
+            <Link
               href="/api/auth/logout"
               className="px-3 py-1 bg-red-500 text-white text-sm rounded hover:bg-red-600 transition-colors"
             >
               Logout
-            </a>
+            </Link>
           </div>
         ) : (
-          <a
+          <Link
             href="/api/auth/login"
             className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 transition-colors"
           >
             Login
-          </a>
+          </Link>
         )}
       </header>
 
-      {/* --- General Error Display --- */}
+      {/* General Error Display */}
       {error && (
         <div
           className="mb-4 p-4 bg-red-100 border border-red-400 text-red-700 rounded"
@@ -298,7 +346,7 @@ export default function Dashboard() {
         </div>
       )}
 
-      {/* --- Optional: Display Overall Schedule Notes --- */}
+      {/* Optional: Display Overall Schedule Notes */}
       {scheduleNotes && (
         <div
           className="mb-4 p-3 bg-yellow-100 border border-yellow-400 text-yellow-800 rounded text-sm"
@@ -308,14 +356,13 @@ export default function Dashboard() {
         </div>
       )}
 
-      {/* --- Main Content Grid --- */}
+      {/* Main Content Grid */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Column 1: Input Area */}
         <div className="lg:col-span-1 bg-white p-6 rounded-lg shadow-lg">
           <h2 className="text-xl font-semibold mb-4 text-gray-700 border-b pb-2">
             Create Your Schedule
           </h2>
-          {/* Render TaskInputForm only if user is logged in */}
           {user ? (
             <TaskInputForm
               onSubmit={handleGenerateSchedule}
@@ -333,15 +380,15 @@ export default function Dashboard() {
           </h2>
 
           {/* Loading States */}
-          {isLoadingSchedule && (
+          {isLoadingSchedule && !userLoading && (
             <div className="flex justify-center items-center h-64">
-              <FaSpinner className="animate-spin text-3xl text-indigo-500" />
+              <FaSpinner className="animate-spin text-3xl text-indigo-500 mr-3" />
               <p className="ml-3 text-gray-600">Loading schedule...</p>
             </div>
           )}
           {isGenerating && !isLoadingSchedule && (
             <div className="flex justify-center items-center h-64">
-              <FaSpinner className="animate-spin text-4xl text-indigo-500" />
+              <FaSpinner className="animate-spin text-4xl text-indigo-500 mr-3" />
               <p className="ml-4 text-lg text-gray-600">
                 Generating schedule...
               </p>
@@ -356,9 +403,9 @@ export default function Dashboard() {
                 {scheduleColumns.map((column) => (
                   <div
                     key={column.id}
-                    className="bg-gray-100 rounded-lg p-3 min-w-[280px] max-w-[320px] flex-shrink-0"
+                    className="bg-gray-100 rounded-lg p-3 min-w-[280px] max-w-[320px] flex-shrink-0 self-start"
                   >
-                    <h3 className="font-semibold text-gray-700 mb-3 px-1 sticky top-0 bg-gray-100 py-1">
+                    <h3 className="font-semibold text-gray-700 mb-3 px-1 sticky top-0 bg-gray-100 py-1 z-10">
                       {column.title}
                     </h3>
                     <div className="space-y-3">
@@ -399,7 +446,6 @@ export default function Dashboard() {
                               <FaRegSquare />
                             )}
                           </button>
-
                           {/* Task Content */}
                           <div className="flex-grow min-w-0">
                             <p
@@ -412,23 +458,31 @@ export default function Dashboard() {
                             <p className="text-xs text-gray-500 mt-1">
                               {task.time}
                             </p>
-
                             {task.notes && (
                               <p className="text-xs italic text-gray-400 mt-1 break-words">
                                 Notes: {task.notes}
                               </p>
                             )}
                           </div>
-
-                          {/* Delete Button */}
-                          <button
-                            onClick={() => handleDeleteTask(task.taskId)}
-                            className="flex-shrink-0 text-gray-400 hover:text-red-500 transition-colors p-1 ml-2"
-                            title="Delete task"
-                            aria-label="Delete task"
-                          >
-                            <FaTrashAlt />
-                          </button>
+                          {/* Action Buttons Group */}
+                          <div className="flex flex-col items-center space-y-2 ml-auto flex-shrink-0 pl-1">
+                            <Link
+                              href={`/chat/${task.taskId}`}
+                              className="text-blue-500 hover:text-blue-700 transition-colors p-1"
+                              title="Get AI help with this task"
+                              aria-label="AI Assistant Chat"
+                            >
+                              <FaRobot size={16} />
+                            </Link>
+                            <button
+                              onClick={() => handleDeleteTask(task.taskId)}
+                              className="text-gray-400 hover:text-red-500 transition-colors p-1"
+                              title="Delete task"
+                              aria-label="Delete task"
+                            >
+                              <FaTrashAlt size={14} />
+                            </button>
+                          </div>
                         </div>
                       ))}
                       {column.tasks.length === 0 && (
