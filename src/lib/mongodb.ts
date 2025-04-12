@@ -1,20 +1,16 @@
-// lib/mongodb.ts
 import { MongoClient } from 'mongodb';
 
-if (!process.env.MONGODB_URI) {
+const uri = process.env.MONGODB_URI;
+if (!uri) {
   throw new Error('Invalid/Missing environment variable: "MONGODB_URI"');
 }
 
-const uri = process.env.MONGODB_URI;
-const options = {
-  // Add any specific MongoClient options here if needed
-  // e.g., appName: 'StudioGenie'
-};
+const options = {};
 
 let client: MongoClient;
 let clientPromise: Promise<MongoClient>;
 
-// Use a global variable in development to prevent multiple connections during HMR
+// Extend the global object to include _mongoClientPromise
 declare global {
   // eslint-disable-next-line no-var
   var _mongoClientPromise: Promise<MongoClient> | undefined;

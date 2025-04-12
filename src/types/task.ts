@@ -1,4 +1,4 @@
-// types/task.ts (Example)
+
 export interface Task {
     taskId: string;
     content: string;
