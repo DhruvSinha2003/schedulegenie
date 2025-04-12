@@ -1,0 +1,18 @@
+<svg width="32" height="32" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+  {/* Background Shape (Rounded Square) */}
+  <rect width="32" height="32" rx="6" fill="#4F46E5"/> {/* Indigo-600 background */}
+
+  {/* Simplified Calendar Page Shape */}
+  <rect x="6" y="7" width="20" height="18" rx="3" fill="white"/>
+
+  {/* Calendar Rings (Cutouts) - Drawn *after* the white page */}
+  <circle cx="12" cy="7" r="2" fill="#4F46E5"/> {/* Match background color */}
+  <circle cx="20" cy="7" r="2" fill="#4F46E5"/> {/* Match background color */}
+
+  {/* AI Node Symbol */}
+  {/* Central Circle */}
+  <circle cx="16" cy="17" r="3.5" fill="#818CF8"/> {/* Lighter Indigo-400 */}
+
+  {/* Connecting Arc/Line (Suggesting processing/connection) */}
+  <path d="M12 13.5 Q 16 11.5 20 13.5" stroke="#818CF8" stroke-width="2.5" fill="none" stroke-linecap="round"/>
+</svg>
