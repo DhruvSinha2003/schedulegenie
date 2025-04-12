@@ -1,5 +1,7 @@
+// app/api/get-schedule/route.ts
 import clientPromise from '@/lib/mongodb';
 import { getSession } from '@auth0/nextjs-auth0';
+import { cookies } from 'next/headers'; // Import cookies
 import { NextRequest, NextResponse } from 'next/server';
 
 const DB_NAME = process.env.MONGODB_DB_NAME || "StudioGenieDB";
@@ -8,18 +10,16 @@ const USERS_COLLECTION = "users";
 
 export async function GET(req: NextRequest) {
     try {
-        // In App Router, getSession() doesn't need arguments
-        const session = await getSession();
-        
+        const cookieStore = cookies(); // Get cookies
+        const session = await getSession({ cookieStore }); // Pass to getSession
+
         if (!session || !session.user) {
-            console.log("get-schedule: Unauthorized access attempt.");
             return NextResponse.json({ message: 'Unauthorized' }, { status: 401 });
         }
-        
-        const userId = session.user.sub;
-        console.log("get-schedule: Authorized access for user:", userId);
 
-        // Optional: Upsert user data on fetch as well (ensures user exists on first load)
+        const userId = session.user.sub;
+
+        // Optional: Upsert user data on fetch as well
         try {
             const client = await clientPromise;
             const db = client.db(DB_NAME);
@@ -39,7 +39,7 @@ export async function GET(req: NextRequest) {
             );
         } catch (userDbError) {
             console.error("Error upserting user during get-schedule:", userDbError);
-            // Log and continue, fetching schedule is primary goal
+            // Log and continue
         }
 
         // Fetch the single schedule document for the user
@@ -47,16 +47,13 @@ export async function GET(req: NextRequest) {
         const db = client.db(DB_NAME);
         const schedulesCollection = db.collection(SCHEDULES_COLLECTION);
 
-        console.log("get-schedule: Fetching schedule for user:", userId);
         const userSchedule = await schedulesCollection.findOne({ userId: userId });
 
         if (!userSchedule || !userSchedule.tasks || !Array.isArray(userSchedule.tasks)) {
-            console.log("get-schedule: No schedule document or tasks array found for user:", userId);
-            // No schedule found for this user yet
+            // No schedule found or tasks array missing/invalid
             return NextResponse.json({ tasks: [], notes: "No schedule generated yet." }, { status: 200 }); // Return empty tasks array
         }
 
-        console.log("get-schedule: Schedule found, returning", userSchedule.tasks.length, "tasks for user:", userId);
         // Return the tasks array and any potential notes
         return NextResponse.json(
             {
