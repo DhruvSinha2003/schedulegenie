@@ -29,7 +29,7 @@ export default function Home() {
           <div className="flex justify-between items-center">
             <div className="flex items-center">
               <span className="text-xl font-bold text-blue-600">
-                StudioGenie
+                ScheduleGenie
               </span>
             </div>
             <div>
@@ -77,7 +77,7 @@ export default function Home() {
           Your AI-Powered Scheduling Assistant
         </h1>
         <p className="text-xl text-gray-600 max-w-3xl mx-auto mb-10">
-          StudioGenie intelligently organizes your tasks, creates time-blocked
+          ScheduleGenie intelligently organizes your tasks, creates time-blocked
           schedules, and helps you stay productive with AI assistance.
         </p>
 
@@ -107,7 +107,7 @@ export default function Home() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center mb-16">
             <h2 className="text-3xl font-bold text-gray-900">
-              How StudioGenie Works
+              How ScheduleGenie Works
             </h2>
             <p className="mt-4 text-lg text-gray-600">
               Powered by AI to simplify your scheduling process
@@ -175,7 +175,7 @@ export default function Home() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center mb-12">
             <h2 className="text-3xl font-bold text-gray-900 mb-4">
-              The StudioGenie Experience
+              The ScheduleGenie Experience
             </h2>
             <p className="text-lg text-gray-600 max-w-3xl mx-auto">
               Our simple workflow helps you create the perfect schedule in
@@ -231,7 +231,7 @@ export default function Home() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center">
             <p className="text-gray-300">
-              © 2025 StudioGenie. All rights reserved.
+              © 2025 ScheduleGenie. All rights reserved.
             </p>
             <p className="mt-2 text-gray-400 text-sm">
               Powered by Google Gemini API and Auth0

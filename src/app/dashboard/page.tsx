@@ -313,7 +313,7 @@ export default function Dashboard() {
       {/* Header */}
       <header className="mb-8 flex flex-col sm:flex-row justify-between items-center space-y-4 sm:space-y-0 bg-white p-4 rounded-lg shadow">
         <h1 className="text-2xl sm:text-3xl font-bold text-gray-800">
-          Studio<span className="text-indigo-600">Genie</span>
+          Schedule<span className="text-indigo-600">Genie</span>
         </h1>
         {user ? (
           <div className="flex items-center space-x-4">
