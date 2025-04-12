@@ -149,7 +149,7 @@ export default function Home() {
                 AI Assistant Chat
               </h3>
               <p className="text-gray-600">
-                Get help and recommendations to optimize your workflow and
+                Get recommendations and help to optimize your workflow and
                 tasks.
               </p>
             </div>
@@ -218,8 +218,7 @@ export default function Home() {
                 View & Edit Schedule
               </h3>
               <p className="text-gray-600">
-                Get your AI-generated schedule on a clean, interactive
-                Trello-style board.
+                Get your AI-generated schedule in one click
               </p>
             </div>
           </div>
@@ -232,9 +231,6 @@ export default function Home() {
           <div className="text-center">
             <p className="text-gray-300">
               © 2025 ScheduleGenie. All rights reserved.
-            </p>
-            <p className="mt-2 text-gray-400 text-sm">
-              Powered by Google Gemini API and Auth0
             </p>
           </div>
         </div>
