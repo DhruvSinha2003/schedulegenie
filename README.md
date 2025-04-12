@@ -87,32 +87,6 @@ Open [http://localhost:3000](http://localhost:3000) in your browser to view the 
 
 ---
 
-## Project Structure
-
-The project is organized as follows:
-
-```
-schedulegenie/
-├── src/
-│   ├── app/
-│   │   ├── api/                # API routes for backend logic
-│   │   ├── chat/               # Chat interface for AI assistant
-│   │   ├── dashboard/          # User dashboard for managing tasks
-│   │   ├── layout.tsx          # Root layout component
-│   │   ├── page.tsx            # Landing page
-│   │   └── globals.css         # Global styles
-│   ├── components/             # Reusable React components
-│   ├── lib/                    # Utility libraries (e.g., MongoDB client)
-│   └── styles/                 # Additional styles (if any)
-├── .env.local                  # Environment variables (not committed)
-├── package.json                # Project dependencies and scripts
-├── tsconfig.json               # TypeScript configuration
-├── next.config.ts              # Next.js configuration
-└── README.md                   # Project documentation
-```
-
----
-
 ## How It Works
 
 1. **Task Input**: Users can input tasks manually or use voice dictation via the Web Speech API.
