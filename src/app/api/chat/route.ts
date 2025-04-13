@@ -1,6 +1,6 @@
 // app/api/chat/route.ts
 import clientPromise from '@/lib/mongodb';
-import { getSession } from '@auth0/nextjs-auth0/edge';
+import { getSession } from '@auth0/nextjs-auth0';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import { NextRequest, NextResponse } from 'next/server';
 
@@ -21,7 +21,9 @@ interface ChatMessage {
 
 export async function POST(req: NextRequest) {
     try {
-        const session = await getSession();
+        // Updated session handling for App Router
+        const res = new NextResponse();
+        const session = await getSession(req, res);
         
         if (!session || !session.user) {
             return NextResponse.json({ message: 'Unauthorized' }, { status: 401 });

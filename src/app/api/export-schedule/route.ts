@@ -2,7 +2,7 @@
 import { formatForICS, parseTaskDateTime } from '@/lib/dateUtils';
 import clientPromise from '@/lib/mongodb';
 import { Task } from '@/types/task';
-import { getSession } from '@auth0/nextjs-auth0/edge';
+import { getSession } from '@auth0/nextjs-auth0';
 import * as ics from 'ics';
 import { NextResponse } from 'next/server';
 

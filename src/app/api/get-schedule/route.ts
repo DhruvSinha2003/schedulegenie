@@ -1,6 +1,6 @@
 // app/api/get-schedule/route.ts
 import clientPromise from '@/lib/mongodb';
-import { getSession } from '@auth0/nextjs-auth0/edge'; // Updated import
+import { getSession } from '@auth0/nextjs-auth0'; // Updated import
 import { NextResponse } from 'next/server';
 
 const DB_NAME = process.env.MONGODB_DB_NAME || "StudioGenieDB";
@@ -9,7 +9,6 @@ const USERS_COLLECTION = "users";
 
 export async function GET() {
     try {
-        // Get the session using the edge-compatible method
         const session = await getSession();
 
         if (!session || !session.user) {

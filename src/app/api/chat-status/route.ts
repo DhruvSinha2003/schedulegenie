@@ -1,16 +1,18 @@
 // app/api/chat-status/route.ts
 import clientPromise from '@/lib/mongodb';
-import { getSession } from '@auth0/nextjs-auth0/edge';
-import { NextResponse } from 'next/server';
+import { getSession } from '@auth0/nextjs-auth0';
+import { NextRequest, NextResponse } from 'next/server';
 
 const DB_NAME = process.env.MONGODB_DB_NAME || "StudioGenieDB";
 const USERS_COLLECTION = "users";
 const RATE_LIMIT_COUNT = 5;
 const RATE_LIMIT_WINDOW_MINUTES = 10;
 
-export async function GET() {
+export async function GET(req: NextRequest) {
     try {
-        const session = await getSession();
+        // Updated session handling
+        const res = new NextResponse();
+        const session = await getSession(req, res);
         
         if (!session || !session.user) {
             return NextResponse.json({ message: 'Unauthorized' }, { status: 401 });

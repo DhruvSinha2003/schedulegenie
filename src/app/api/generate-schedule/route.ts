@@ -1,6 +1,6 @@
 // app/api/generate-schedule/route.ts
 import clientPromise from '@/lib/mongodb';
-import { getSession } from '@auth0/nextjs-auth0/edge';
+import { getSession } from '@auth0/nextjs-auth0';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import crypto from 'crypto';
 import { NextRequest, NextResponse } from 'next/server';

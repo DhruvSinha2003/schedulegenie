@@ -1,6 +1,6 @@
 // app/api/delete-task/route.ts
 import clientPromise from '@/lib/mongodb';
-import { getSession } from '@auth0/nextjs-auth0/edge';
+import { getSession } from '@auth0/nextjs-auth0';
 import { NextRequest, NextResponse } from 'next/server';
 
 const DB_NAME = process.env.MONGODB_DB_NAME || "StudioGenieDB";
