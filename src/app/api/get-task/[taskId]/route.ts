@@ -1,6 +1,6 @@
 import clientPromise from '@/lib/mongodb';
-import { getSession } from '@auth0/nextjs-auth0';
-import { NextRequest, NextResponse } from 'next/server';
+import { getSession } from '@auth0/nextjs-auth0/edge';
+import { NextResponse } from 'next/server';
 
 const DB_NAME = process.env.MONGODB_DB_NAME || "StudioGenieDB";
 const SCHEDULES_COLLECTION = "schedules";
@@ -9,12 +9,10 @@ interface Context {
     params: { taskId?: string };
 }
 
-export async function GET(req: NextRequest, context: Context) {
+export async function GET( context: Context) {
     try {
-        // Create a new response object for cookies
-        const res = new NextResponse();
-        // Pass both request and response to getSession
-        const session = await getSession(req, res);
+        // Get the session using the edge-compatible method
+        const session = await getSession();
         
         if (!session || !session.user) {
             return NextResponse.json({ message: 'Unauthorized' }, { status: 401 });
