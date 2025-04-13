@@ -1,9 +1,10 @@
+// app/page.tsx
 "use client";
 
 import { useUser } from "@auth0/nextjs-auth0/client";
 import { Clock, MessageSquare, Mic, Trello } from "lucide-react";
 import Image from "next/image";
-import Link from "next/link";
+import Link from "next/link"; // Keep Link import for other links
 
 export default function Home() {
   const { user, error, isLoading } = useUser();
@@ -44,20 +45,21 @@ export default function Home() {
                         width={32}
                         height={32}
                         className="rounded-full"
-                        priority
-                        unoptimized
+                        priority // Keep priority if needed for LCP optimization
+                        unoptimized // Keep unoptimized if needed for external images
                       />
                     )}
                     <span className="text-gray-700">
                       Hi, {user.name?.split(" ")[0] || user.nickname}
                     </span>
                   </div>
-                  <Link
+                  {/* eslint-disable-next-line @next/next/no-html-link-for-pages */}
+                  <a
                     href="/api/auth/logout"
                     className="px-4 py-2 bg-gray-200 text-gray-700 rounded hover:bg-gray-300 transition-colors"
                   >
                     Logout
-                  </Link>
+                  </a>
                 </div>
               ) : (
                 <div className="space-x-2">
