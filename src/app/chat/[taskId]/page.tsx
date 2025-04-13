@@ -3,7 +3,7 @@
 
 import { useUser } from "@auth0/nextjs-auth0/client";
 import Link from "next/link";
-import { useParams } from "next/navigation"; // Removed useRouter as it wasn't used
+import { useParams } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   FaArrowLeft,
@@ -15,8 +15,7 @@ import {
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 
-// Interfaces (assuming Task type is imported or defined)
-// import { Task } from "@/types/task";
+// Interfaces
 interface Task {
   taskId: string;
   content: string;
@@ -38,7 +37,6 @@ interface RateLimitStatus {
 export default function ChatPage() {
   const { user, isLoading: userLoading, error: userError } = useUser();
   const params = useParams();
-  // const router = useRouter(); // Removed if not used
   const taskId = params.taskId as string;
 
   const [task, setTask] = useState<Task | null>(null);
@@ -51,20 +49,22 @@ export default function ChatPage() {
   const chatEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
-  // Auto-resize textarea
+  // Auto-resize textarea - improved to handle minimum height
   const autoResizeTextarea = () => {
-    // ... (logic remains the same) ...
     if (textareaRef.current) {
       textareaRef.current.style.height = "auto";
       const scrollHeight = textareaRef.current.scrollHeight;
-      textareaRef.current.style.height = `${Math.min(scrollHeight, 150)}px`;
+      // Increased minimum height to 64px (from 48px)
+      textareaRef.current.style.height = `${Math.max(
+        Math.min(scrollHeight, 150),
+        64
+      )}px`;
     }
   };
 
   // Calculate estimated reset time
   const calculateResetTime = useCallback(
     (windowMinutes: number | undefined): string | null => {
-      // ... (logic remains the same) ...
       if (typeof windowMinutes !== "number" || windowMinutes <= 0) return null;
       const now = new Date();
       const resetTime = new Date(now.getTime() + windowMinutes * 60 * 1000);
@@ -78,7 +78,6 @@ export default function ChatPage() {
 
   // Fetch Task Details Effect
   useEffect(() => {
-    // ... (logic remains the same) ...
     const fetchTask = async () => {
       if (!taskId || !user) return;
       setTaskLoading(true);
@@ -141,7 +140,6 @@ export default function ChatPage() {
 
   // Effect for Initial Fetch and Interval for Rate Limit
   useEffect(() => {
-    // ... (logic remains the same) ...
     if (user) {
       fetchRateLimitStatus();
     }
@@ -167,7 +165,6 @@ export default function ChatPage() {
 
   // Handle Sending Message Function
   const handleSendMessage = async () => {
-    // ... (logic remains the same) ...
     const trimmedInput = userInput.trim();
     if (!trimmedInput || isSending || !task || !user) return;
     if (rateLimit && rateLimit.remaining <= 0) {
@@ -230,7 +227,6 @@ export default function ChatPage() {
 
   // --- Render Logic ---
   if (userLoading || taskLoading) {
-    /* ... loading spinner ... */
     return (
       <div className="flex justify-center items-center min-h-screen bg-gradient-to-br from-blue-50 to-indigo-50">
         <div className="bg-white p-8 rounded-lg shadow-md flex flex-col items-center">
@@ -241,7 +237,6 @@ export default function ChatPage() {
     );
   }
   if (userError) {
-    /* ... auth error ... */
     return (
       <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-50 flex justify-center items-center p-4">
         <div className="bg-white p-8 rounded-lg shadow-lg max-w-md w-full text-center">
@@ -260,7 +255,6 @@ export default function ChatPage() {
     );
   }
   if (!user) {
-    /* ... login required ... */
     return (
       <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-50 flex justify-center items-center p-4">
         <div className="bg-white p-8 rounded-lg shadow-lg max-w-md w-full text-center">
@@ -279,7 +273,6 @@ export default function ChatPage() {
     );
   }
   if (!task && !taskLoading) {
-    /* ... task not found ... */
     return (
       <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-50 flex justify-center items-center p-4">
         <div className="bg-white p-8 rounded-lg shadow-lg max-w-md w-full text-center">
@@ -304,23 +297,22 @@ export default function ChatPage() {
   // Main chat UI
   return (
     <div className="flex flex-col h-screen bg-gradient-to-r from-blue-50 to-indigo-50">
-      {/* Header */}
-      <header className="bg-white shadow-md px-4 sm:px-6 py-3 flex items-center sticky top-0 z-20 border-b border-gray-200">
-        {/* ... header content remains the same ... */}
+      {/* Header - Updated with better spacing and shadow */}
+      <header className="bg-white shadow-md px-4 sm:px-6 py-4 flex items-center sticky top-0 z-20 border-b border-gray-200">
         <Link
           href="/dashboard"
-          className="text-gray-600 hover:text-indigo-700 transition-colors p-2 rounded-full hover:bg-indigo-50 -ml-2 mr-2"
+          className="text-gray-600 hover:text-indigo-700 transition-colors p-2 rounded-full hover:bg-indigo-50 -ml-2 mr-3"
           title="Back to Dashboard"
         >
           <FaArrowLeft size={20} />
         </Link>
         {task && (
           <div className="flex-grow min-w-0">
-            <h1 className="text-lg font-semibold text-gray-800 truncate">
+            <h1 className="text-xl font-semibold text-gray-800 truncate">
               AI Assistant
             </h1>
             <p
-              className="text-sm text-indigo-700 font-medium truncate"
+              className="text-sm text-indigo-700 font-medium truncate mt-1"
               title={`${task.content} • ${task.day} at ${task.time}`}
             >
               Task: {task.content} • {task.day} at {task.time}
@@ -352,13 +344,11 @@ export default function ChatPage() {
         )}
       </header>
 
-      {/* Error Display */}
+      {/* Error Display - Improved design and spacing */}
       {error && (
-        <div className="sticky top-[65px] z-10 p-0 mx-4 sm:mx-6 lg:mx-10 xl:mx-16 mt-3">
-          {" "}
-          {/* Adjusted top & added more horizontal margin for centering */}
+        <div className="sticky top-[73px] z-10 p-0 mx-4 sm:mx-6 lg:mx-10 xl:mx-16 mt-3">
           <div
-            className="p-3 bg-red-100 border border-red-400 text-red-700 rounded-md shadow-sm text-sm flex items-center justify-between"
+            className="p-3 bg-red-50 border border-red-300 text-red-700 rounded-lg shadow-sm text-sm flex items-center justify-between"
             role="alert"
           >
             <div className="flex items-center mr-2">
@@ -388,15 +378,15 @@ export default function ChatPage() {
         </div>
       )}
 
-      {/* Chat History - Increased padding for centering effect */}
-      <div className="flex-grow overflow-y-auto py-6 px-6 sm:px-10 md:px-16 lg:px-24 space-y-4">
+      {/* Chat History - Enhanced with better message styling and overflow handling */}
+      <div className="flex-grow overflow-y-auto py-6 px-6 sm:px-10 md:px-16 lg:px-24 space-y-6">
         {chatHistory.length === 0 && !isSending && (
           <div className="flex justify-center items-center h-full">
-            <div className="text-center text-gray-500 max-w-md">
-              <h3 className="text-xl font-medium mb-2">
+            <div className="text-center text-gray-500 max-w-md bg-white p-8 rounded-xl shadow-sm border border-gray-100">
+              <h3 className="text-xl font-medium mb-3 text-indigo-700">
                 Start the conversation
               </h3>
-              <p>
+              <p className="text-gray-600">
                 Ask the AI assistant anything about your task: &quot;
                 {task?.content}
                 &quot;.
@@ -411,18 +401,18 @@ export default function ChatPage() {
               msg.role === "user" ? "justify-end" : "justify-start"
             }`}
           >
-            {/* Bubble container with max-width */}
+            {/* Bubble container with max-width and improved styling */}
             <div
-              className={`max-w-xl lg:max-w-2xl rounded-xl shadow-sm ${
+              className={`max-w-xl lg:max-w-2xl rounded-2xl shadow-sm ${
                 msg.role === "user"
                   ? "bg-indigo-600 text-white"
                   : "bg-white text-gray-800 border border-gray-200"
               }`}
             >
-              {/* Inner container for padding and overflow scrolling */}
-              <div className="px-4 py-2 overflow-x-auto">
+              {/* Inner container with better padding and overflow handling */}
+              <div className="px-5 py-3 overflow-x-auto scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-transparent">
                 {msg.role === "model" ? (
-                  <div className="prose prose-sm max-w-none prose-p:my-1 prose-ul:my-1 prose-ol:my-1 break-words">
+                  <div className="prose prose-sm max-w-none prose-p:my-1.5 prose-ul:my-1.5 prose-ol:my-1.5 break-words overflow-x-auto">
                     <ReactMarkdown remarkPlugins={[remarkGfm]}>
                       {msg.text}
                     </ReactMarkdown>
@@ -436,15 +426,15 @@ export default function ChatPage() {
         ))}
         {isSending && (
           <div className="flex justify-start">
-            <div className="bg-white text-gray-800 px-4 py-3 rounded-xl shadow-sm border border-gray-200">
-              <div className="flex space-x-1.5">
-                <div className="w-2 h-2 rounded-full bg-gray-400 animate-bounce"></div>
+            <div className="bg-white text-gray-800 px-5 py-4 rounded-2xl shadow-sm border border-gray-200">
+              <div className="flex space-x-2">
+                <div className="w-2.5 h-2.5 rounded-full bg-indigo-400 animate-bounce"></div>
                 <div
-                  className="w-2 h-2 rounded-full bg-gray-400 animate-bounce"
+                  className="w-2.5 h-2.5 rounded-full bg-indigo-500 animate-bounce"
                   style={{ animationDelay: "0.1s" }}
                 ></div>
                 <div
-                  className="w-2 h-2 rounded-full bg-gray-400 animate-bounce"
+                  className="w-2.5 h-2.5 rounded-full bg-indigo-600 animate-bounce"
                   style={{ animationDelay: "0.2s" }}
                 ></div>
               </div>
@@ -454,11 +444,9 @@ export default function ChatPage() {
         <div ref={chatEndRef} className="h-1" />
       </div>
 
-      {/* Input Area */}
-      <div className="bg-white p-4 border-t border-gray-200 sticky bottom-0 shadow-[0_-2px_5px_-1px_rgba(0,0,0,0.05)]">
-        {/* Centering the input bar itself with max-width */}
-        <div className="max-w-3xl mx-auto">
-          <div className="flex items-start space-x-3">
+      <div className="bg-white p-4 sm:p-5 border-t border-gray-200 sticky bottom-0 shadow-[0_-2px_10px_-1px_rgba(0,0,0,0.08)]">
+        <div className="max-w-5xl mx-auto">
+          <div className="flex items-end space-x-3">
             <div className="flex-grow flex flex-col">
               <textarea
                 ref={textareaRef}
@@ -467,11 +455,11 @@ export default function ChatPage() {
                 placeholder={
                   rateLimit?.remaining === 0
                     ? "Rate limit reached..."
-                    : "Ask the AI..."
+                    : "Ask the AI assistant..."
                 }
-                className="w-full p-3 border border-gray-300 rounded-lg resize-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 disabled:bg-gray-100 disabled:cursor-not-allowed transition-colors text-sm sm:text-base"
+                className="w-full p-4 border border-gray-300 rounded-lg resize-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 disabled:bg-gray-50 disabled:text-gray-500 disabled:cursor-not-allowed transition-colors text-sm sm:text-base"
                 style={{
-                  minHeight: "48px",
+                  minHeight: "64px",
                   maxHeight: "150px",
                   overflowY: "auto",
                 }}
@@ -484,13 +472,12 @@ export default function ChatPage() {
                     handleSendMessage();
                   }
                 }}
-                rows={1}
+                rows={2} // Increased from 1
               />
               {rateLimit && rateLimit.remaining <= 0 && (
-                <p className="text-xs text-red-500 mt-1 mb-0 px-1">
-                  {" "}
-                  Rate limit reached. Wait until ~{rateLimit.resetTime}.{" "}
-                </p>
+                <div className="mt-2 text-xs text-red-500 px-1">
+                  Rate limit reached. Wait until ~{rateLimit.resetTime}.
+                </div>
               )}
             </div>
             <button
@@ -500,14 +487,13 @@ export default function ChatPage() {
                 !userInput.trim() ||
                 (rateLimit !== null && rateLimit.remaining <= 0)
               }
-              className="bg-indigo-600 hover:bg-indigo-700 text-white font-medium px-4 py-2 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center transition-colors self-start flex-shrink-0" // Added flex-shrink-0
-              style={{ height: "48px", width: "48px" }}
+              className="bg-indigo-600 hover:bg-indigo-700 text-white font-medium rounded-lg disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center transition-colors flex-shrink-0 h-16 w-16"
               title="Send message"
             >
               {isSending ? (
-                <FaSpinner className="animate-spin text-lg" />
+                <FaSpinner className="animate-spin text-xl" />
               ) : (
-                <FaPaperPlane className="text-lg" />
+                <FaPaperPlane className="text-xl" />
               )}
             </button>
           </div>
