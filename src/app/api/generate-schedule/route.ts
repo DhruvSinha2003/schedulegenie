@@ -8,14 +8,16 @@ import { NextRequest, NextResponse } from 'next/server';
 const GEMINI_API_KEY = process.env.GOOGLE_GEMINI_API_KEY;
 if (!GEMINI_API_KEY) {
     console.error("CRITICAL: GOOGLE_GEMINI_API_KEY is not set!");
+    // Consider throwing an error or handling differently if the key is absolutely required
 }
+// Initialize genAI conditionally
 const genAI = GEMINI_API_KEY ? new GoogleGenerativeAI(GEMINI_API_KEY) : null;
 
 const DB_NAME = process.env.MONGODB_DB_NAME || "StudioGenieDB";
 const USERS_COLLECTION = "users";
 const SCHEDULES_COLLECTION = "schedules";
 
-// Schema remains the same for now, relying on prompt for better 'content'
+// Schema definition for the AI
 const jsonOutputSchema = `{
   "tasks": [
     {
@@ -28,26 +30,29 @@ const jsonOutputSchema = `{
   "notes": "string (optional: overall notes about the schedule generation)"
 }`;
 
-export async function POST(req: NextRequest) {
+export async function POST(req: NextRequest) { // Takes req
     try {
         if (!genAI) {
             console.error("generate-schedule: Gemini API key missing or client not initialized.");
             return NextResponse.json({ message: 'AI service configuration error.' }, { status: 500 });
         }
 
-        const session = await getSession();
+        const res = new NextResponse(); // Create res
+        const session = await getSession(req, res); // Pass req, res
 
         if (!session || !session.user) {
             return NextResponse.json({ message: 'Unauthorized' }, { status: 401 });
         }
         const userId = session.user.sub;
-        const userEmail = session.user.email;
-        const userName = session.user.name;
-        const userPicture = session.user.picture;
+        // Use nullish coalescing for safety, although Auth0 usually provides these
+        const userEmail = session.user.email ?? 'N/A';
+        const userName = session.user.name ?? session.user.nickname ?? 'User';
+        const userPicture = session.user.picture ?? null;
 
         const body = await req.json();
         const { tasks: taskInputString, availability, flexibility } = body;
 
+        // Input validation
         if (!taskInputString || typeof taskInputString !== 'string' || taskInputString.trim() === "") {
             return NextResponse.json({ message: 'Tasks input cannot be empty.' }, { status: 400 });
         }
@@ -60,7 +65,7 @@ export async function POST(req: NextRequest) {
 
         const now = new Date();
 
-        // Updated Prompt for better content and date ordering
+        // Construct the prompt for the AI
         const prompt = `
           You are StudioGenie, an AI scheduling assistant. Create a time-blocked schedule based on user input.
           The current reference date is ${now.toDateString()}. Use this to interpret relative terms like "today", "tomorrow", "Saturday", "Monday".
@@ -85,35 +90,50 @@ export async function POST(req: NextRequest) {
           If unable to schedule, return JSON with empty "tasks" array and explanation in main "notes".
         `;
 
-        const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' }); // Consider different models if needed
-        
-        // Fixed generationConfig to match SingleRequestOptions
+        // Select the Gemini model
+        const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' }); 
+
+        // Call the AI model
         const result = await model.generateContent({
             contents: [{ role: 'user', parts: [{ text: prompt }] }],
             generationConfig: {
                 temperature: 0.5,
-                maxOutputTokens: 4096,
+                maxOutputTokens: 4096, // Adjust as needed
+                 // Consider adding if you consistently want JSON:
+                // responseMimeType: 'application/json',
             }
         });
-        
+
         const response = result.response;
-        const rawJsonText = response.text();
+        // Ensure response exists before trying to access text()
+        if (!response) {
+             console.error("generate-schedule: No response received from Gemini model.");
+             throw new Error("AI model did not return a response.");
+        }
+        const rawJsonText = response.text(); // Get raw text first
 
         // Parse and Validate Gemini Response
         let parsedResponse;
         try {
-            // Basic cleaning, might need more robust handling depending on AI output variations
-            const cleanedJsonText = rawJsonText.replace(/^```json\s*/, '').replace(/```\s*$/, '').trim();
-            if (!cleanedJsonText) throw new Error("Received empty response from AI after cleaning.");
+            // Robust cleaning: Remove potential markdown fences and trim whitespace
+            const cleanedJsonText = rawJsonText.replace(/^```(?:json)?\s*/i, '').replace(/```\s*$/, '').trim();
+            if (!cleanedJsonText) {
+                console.error("generate-schedule: Received empty response from AI after cleaning.");
+                throw new Error("Received empty response from AI after cleaning.");
+            }
+
+            // Attempt to parse the cleaned text
             parsedResponse = JSON.parse(cleanedJsonText);
 
+            // Validate the structure
             if (typeof parsedResponse !== 'object' || parsedResponse === null || !Array.isArray(parsedResponse.tasks)) {
                 console.error("generate-schedule: Gemini response validation failed: 'tasks' array missing or invalid.", cleanedJsonText);
                 throw new Error("AI returned an unexpected schedule format.");
             }
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         } catch (parseError: any) {
-            console.error('generate-schedule: Error parsing Gemini JSON:', parseError, "\nRaw text:", rawJsonText);
+            console.error('generate-schedule: Error parsing Gemini JSON:', parseError, "\nRaw text received:", rawJsonText);
+            // Return a user-friendly error indicating a parsing issue
             return NextResponse.json({ message: 'Failed to parse AI schedule response. The AI might have returned an invalid format.' }, { status: 500 });
         }
 
@@ -121,11 +141,11 @@ export async function POST(req: NextRequest) {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const newTasks = parsedResponse.tasks.map((task: any) => ({
             taskId: crypto.randomUUID(),
-            content: task.content || 'Unnamed Task', // Use AI-generated content
-            day: task.day || 'Unspecified Day',
-            time: task.time || 'Unspecified Time',
-            isCompleted: false,
-            notes: task.notes || null, // Handle optional notes
+            content: task.content || 'Unnamed Task', // Default content if missing
+            day: task.day || 'Unspecified Day',     // Default day if missing
+            time: task.time || 'Unspecified Time',   // Default time if missing
+            isCompleted: false,                     // Default completion status
+            notes: task.notes || null,              // Handle optional notes
         }));
 
         // --- Append to Existing Schedule ---
@@ -133,11 +153,14 @@ export async function POST(req: NextRequest) {
             const client = await clientPromise;
             const db = client.db(DB_NAME);
 
-            // Upsert User data (can be done less frequently, but fine here)
+            // Upsert User data
             const usersCollection = db.collection(USERS_COLLECTION);
             await usersCollection.updateOne(
                 { userId: userId },
-                { $set: { email: userEmail, name: userName, picture: userPicture, lastLogin: new Date() }, $setOnInsert: { userId: userId, createdAt: new Date() } },
+                {
+                    $set: { email: userEmail, name: userName, picture: userPicture, lastLogin: new Date() },
+                    $setOnInsert: { userId: userId, createdAt: new Date() }
+                },
                 { upsert: true }
             );
 
@@ -160,10 +183,10 @@ export async function POST(req: NextRequest) {
                     },
                     $setOnInsert: {
                         userId: userId,
-                        createdAt: new Date()
+                        createdAt: new Date() // Set createdAt only on insert
                     }
                 },
-                { upsert: true }
+                { upsert: true } // Create the document if it doesn't exist
             );
 
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -174,18 +197,26 @@ export async function POST(req: NextRequest) {
              return NextResponse.json({ message: 'Failed to save the generated schedule to the database.' }, { status: 500 });
         }
 
-        // Return the FULL appended list of tasks and notes
+        // Fetch the updated schedule to return the full list
         const finalSchedule = await clientPromise.then(client => client.db(DB_NAME).collection(SCHEDULES_COLLECTION).findOne({ userId: userId }));
-        return NextResponse.json({ tasks: finalSchedule?.tasks || [], notes: finalSchedule?.notes || null }, { status: 200 });
+        return NextResponse.json(
+            {
+                tasks: finalSchedule?.tasks || [], // Ensure tasks array is always returned
+                notes: finalSchedule?.notes || null
+            },
+            { status: 200, headers: res.headers } // Pass headers
+        );
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (error: any) {
         console.error('Error in /api/generate-schedule:', error);
         const message = error instanceof Error ? error.message : 'An internal server error occurred.';
-        // Avoid leaking too much detail in production errors
+        // Handle specific AI errors like safety blocks
+        // Gemini API errors might have specific structures, check documentation if needed
         if (error.message && error.message.includes("SAFETY")) {
              return NextResponse.json({ message: 'The AI declined to generate a schedule due to safety concerns with the input or output.' }, { status: 400 });
         }
+        // Generic error response
         return NextResponse.json({ message }, { status: 500 });
     }
 }

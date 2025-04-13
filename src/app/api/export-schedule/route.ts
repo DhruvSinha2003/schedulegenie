@@ -1,19 +1,22 @@
-// app/api/export-schedule/route.ts
+// src/app/api/export-schedule/route.ts
 import { formatForICS, parseTaskDateTime } from '@/lib/dateUtils';
 import clientPromise from '@/lib/mongodb';
 import { Task } from '@/types/task';
 import { getSession } from '@auth0/nextjs-auth0';
 import * as ics from 'ics';
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server'; // Import NextRequest
 
 const DB_NAME = process.env.MONGODB_DB_NAME || "StudioGenieDB";
 const SCHEDULES_COLLECTION = "schedules";
 
-export async function GET() {
+// Add req: NextRequest parameter
+export async function GET(req: NextRequest) {
     try {
-        const session = await getSession();
-        
+        const res = new NextResponse(); // Create res
+        const session = await getSession(req, res); // Pass req, res
+
         if (!session || !session.user) {
+            // Returning JSON error for API consistency, though redirect might also work
             return NextResponse.json({ message: 'Unauthorized' }, { status: 401 });
         }
         const userId = session.user.sub;
@@ -24,7 +27,7 @@ export async function GET() {
         const userSchedule = await schedulesCollection.findOne({ userId: userId });
 
         if (!userSchedule || !userSchedule.tasks || !Array.isArray(userSchedule.tasks) || userSchedule.tasks.length === 0) {
-            return NextResponse.json({ message: 'No schedule found or schedule is empty.' }, { status: 404 });
+            return NextResponse.json({ message: 'No schedule found or schedule is empty.' }, { status: 404, headers: res.headers }); // Pass headers
         }
 
         const events: ics.EventAttributes[] = [];
@@ -40,8 +43,8 @@ export async function GET() {
                 if (startArr && endArr) {
                     events.push({
                         title: task.content,
-                        start: startArr as [number, number, number, number, number],
-                        end: endArr as [number, number, number, number, number],
+                        start: startArr as [number, number, number, number, number], // Type assertion for ics library
+                        end: endArr as [number, number, number, number, number],   // Type assertion for ics library
                         description: task.notes || undefined,
                         uid: task.taskId,
                     });
@@ -54,26 +57,30 @@ export async function GET() {
         });
 
         if (events.length === 0) {
-            return NextResponse.json({ message: 'Could not parse any tasks into valid calendar events.' }, { status: 400 });
+             return NextResponse.json({ message: 'Could not parse any tasks into valid calendar events.' }, { status: 400, headers: res.headers }); // Pass headers
         }
 
         const { error, value } = ics.createEvents(events);
 
         if (error) {
             console.error("Error creating ICS file:", error);
-            throw error;
+            throw error; // Let catch block handle
         }
 
         if (!value) {
-            return NextResponse.json({ message: 'Failed to generate ICS data.' }, { status: 500 });
+            // Ensure value exists before proceeding
+            return NextResponse.json({ message: 'Failed to generate ICS data.' }, { status: 500, headers: res.headers }); // Pass headers
         }
 
+        // Combine Auth0 headers with ICS headers
+        const combinedHeaders = new Headers(res.headers); // Initialize with headers from Auth0 session handling
+        combinedHeaders.set('Content-Type', 'text/calendar; charset=utf-8');
+        combinedHeaders.set('Content-Disposition', 'attachment; filename="schedule.ics"');
+
+        // Create the final response with the ICS value and combined headers
         return new NextResponse(value, {
             status: 200,
-            headers: {
-                'Content-Type': 'text/calendar; charset=utf-8',
-                'Content-Disposition': 'attachment; filename="schedule.ics"',
-            },
+            headers: combinedHeaders, // Use combined headers
         });
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any

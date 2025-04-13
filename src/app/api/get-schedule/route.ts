@@ -1,15 +1,19 @@
-// app/api/get-schedule/route.ts
+// src/app/api/get-schedule/route.ts
 import clientPromise from '@/lib/mongodb';
-import { getSession } from '@auth0/nextjs-auth0'; // Updated import
-import { NextResponse } from 'next/server';
+import { getSession } from '@auth0/nextjs-auth0';
+import { NextRequest, NextResponse } from 'next/server';
 
 const DB_NAME = process.env.MONGODB_DB_NAME || "StudioGenieDB";
 const SCHEDULES_COLLECTION = "schedules";
 const USERS_COLLECTION = "users";
 
-export async function GET() {
+// Add req: NextRequest parameter
+export async function GET(req: NextRequest) {
     try {
-        const session = await getSession();
+        // Create a NextResponse object
+        const res = new NextResponse();
+        // Pass req and res to getSession
+        const session = await getSession(req, res);
 
         if (!session || !session.user) {
             return NextResponse.json({ message: 'Unauthorized' }, { status: 401 });
@@ -49,7 +53,7 @@ export async function GET() {
 
         if (!userSchedule || !userSchedule.tasks || !Array.isArray(userSchedule.tasks)) {
             // No schedule found or tasks array missing/invalid
-            return NextResponse.json({ tasks: [], notes: "No schedule generated yet." }, { status: 200 }); // Return empty tasks array
+            return NextResponse.json({ tasks: [], notes: "No schedule generated yet." }, { status: 200, headers: res.headers }); // Pass headers
         }
 
         // Return the tasks array and any potential notes
@@ -58,7 +62,7 @@ export async function GET() {
                 tasks: userSchedule.tasks,
                 notes: userSchedule.notes || null
             },
-            { status: 200 }
+            { status: 200, headers: res.headers } // Pass headers
         );
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (error: any) {

@@ -1,4 +1,4 @@
-// app/api/delete-task/route.ts
+// src/app/api/delete-task/route.ts
 import clientPromise from '@/lib/mongodb';
 import { getSession } from '@auth0/nextjs-auth0';
 import { NextRequest, NextResponse } from 'next/server';
@@ -6,10 +6,11 @@ import { NextRequest, NextResponse } from 'next/server';
 const DB_NAME = process.env.MONGODB_DB_NAME || "StudioGenieDB";
 const SCHEDULES_COLLECTION = "schedules";
 
-export async function DELETE(req: NextRequest) {
+export async function DELETE(req: NextRequest) { // Takes req
     try {
-        const session = await getSession();
-        
+        const res = new NextResponse(); // Create res
+        const session = await getSession(req, res); // Pass req, res
+
         if (!session || !session.user) {
             return NextResponse.json({ message: 'Unauthorized' }, { status: 401 });
         }
@@ -29,7 +30,7 @@ export async function DELETE(req: NextRequest) {
         // Fix the $pull operator typing
         const result = await schedulesCollection.updateOne(
             { userId: userId },
-            // @ts-expect-error - MongoDB typing issue with $pull
+            // @ts-expect-error - MongoDB typing issue with $pull (or use more specific type assertion if preferred)
             { $pull: { tasks: { taskId: taskId } } }
         );
 
@@ -42,7 +43,7 @@ export async function DELETE(req: NextRequest) {
             return NextResponse.json({ message: 'Task not found or already deleted.' }, { status: 404 });
         }
 
-        return NextResponse.json({ message: 'Task deleted successfully.' }, { status: 200 });
+        return NextResponse.json({ message: 'Task deleted successfully.' }, { status: 200, headers: res.headers }); // Pass headers
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (error: any) {

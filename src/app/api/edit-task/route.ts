@@ -1,4 +1,4 @@
-// app/api/edit-task/route.ts
+// src/app/api/edit-task/route.ts
 import clientPromise from '@/lib/mongodb';
 import { getSession } from '@auth0/nextjs-auth0';
 import { NextRequest, NextResponse } from 'next/server';
@@ -9,10 +9,11 @@ const SCHEDULES_COLLECTION = "schedules";
 // Define allowed fields for update
 const ALLOWED_UPDATE_FIELDS = ['content', 'day', 'time', 'notes'];
 
-export async function PATCH(req: NextRequest) {
+export async function PATCH(req: NextRequest) { // Takes req
     try {
-        const session = await getSession();
-        
+        const res = new NextResponse(); // Create res
+        const session = await getSession(req, res); // Pass req, res
+
         if (!session || !session.user) {
             return NextResponse.json({ message: 'Unauthorized' }, { status: 401 });
         }
@@ -39,7 +40,8 @@ export async function PATCH(req: NextRequest) {
             if (ALLOWED_UPDATE_FIELDS.includes(key)) {
                 // Basic validation
                 if (key === 'notes' && updates[key] !== null && typeof updates[key] !== 'string') {
-                    continue; // skip invalid notes type
+                    // Allow null for notes, but ensure it's a string otherwise
+                    continue; // skip invalid notes type if not null
                 }
                 if (key !== 'notes' && (typeof updates[key] !== 'string' || updates[key].trim() === '')) {
                     // Require non-empty strings for content, day, time
@@ -78,7 +80,7 @@ export async function PATCH(req: NextRequest) {
             // If task exists, it means data was already correct, treat as success
         }
 
-        return NextResponse.json({ message: 'Task updated successfully.' }, { status: 200 });
+        return NextResponse.json({ message: 'Task updated successfully.' }, { status: 200, headers: res.headers }); // Pass headers
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (error: any) {
